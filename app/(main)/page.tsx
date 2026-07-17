@@ -8,7 +8,6 @@ import {
   ShoppingBag, ArrowRight, Shield, Zap, Star, Phone, Truck,
   ChevronRight, Watch, Flame,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { ProductCard } from '@/components/ProductCard';
 import type { Product, Category } from '@/lib/database.types';
 
@@ -36,20 +35,19 @@ export default function HomePage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: products }, { data: cats }, { data: deals }] = await Promise.all([
-        supabase.from('products').select('*').eq('is_featured', true).eq('is_active', true).limit(8),
-        supabase.from('categories').select('*').order('display_order'),
-        supabase
-          .from('products')
-          .select('*')
-          .eq('is_daily_deal', true)
-          .eq('is_active', true)
-          .order('updated_at', { ascending: false })
-          .limit(10),
+      const [featuredRes, catsRes, dealsRes] = await Promise.all([
+        fetch('/api/products?featured=true&limit=8', { cache: 'no-store' }),
+        fetch('/api/categories', { cache: 'no-store' }),
+        fetch('/api/products?daily_deal=true&limit=10', { cache: 'no-store' }),
       ]);
-      setFeaturedProducts(products ?? []);
-      setCategories(cats ?? []);
-      setDailyDeals(deals ?? []);
+      const [featured, cats, deals] = await Promise.all([
+        featuredRes.json(),
+        catsRes.json(),
+        dealsRes.json(),
+      ]);
+      setFeaturedProducts(featured.products ?? []);
+      setCategories(cats.categories ?? []);
+      setDailyDeals(deals.products ?? []);
       setLoadingProducts(false);
     }
     load();
@@ -186,9 +184,9 @@ export default function HomePage() {
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                   <Link href={`/products?category=${cat.slug}`} className="block group">
                     <div className="relative overflow-hidden rounded-2xl aspect-[4/3] card-surface border border-white/6 hover:border-gold-500/25 transition-all duration-300">
-                      {cat.image_url && (
+                      {cat.imageUrl && (
                         <img
-                          src={cat.image_url}
+                          src={cat.imageUrl}
                           alt={cat.name}
                           className="w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-all duration-500 group-hover:scale-110"
                         />

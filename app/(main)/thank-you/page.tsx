@@ -4,8 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { CheckCircle, Truck, Package, ArrowRight, Sparkles, Home, ShoppingBag } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { CircleCheck as CheckCircle, Truck, Package, ArrowRight, Sparkles, Chrome as Home, ShoppingBag } from 'lucide-react';
 
 function ThankYouContent() {
   const searchParams = useSearchParams();
@@ -15,13 +14,10 @@ function ThankYouContent() {
 
   useEffect(() => {
     if (!orderNumber) { setLoading(false); return; }
-    supabase
-      .from('orders')
-      .select('*, order_items(*)')
-      .eq('order_number', orderNumber)
-      .maybeSingle()
-      .then(({ data }) => {
-        setOrder(data);
+    fetch(`/api/orders?orderNumber=${encodeURIComponent(orderNumber)}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(({ order }) => {
+        setOrder(order);
         setLoading(false);
       });
   }, [orderNumber]);
@@ -72,7 +68,7 @@ function ThankYouContent() {
             <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/5">
               <div>
                 <div className="text-xs text-silver-500 mb-1">Order Number</div>
-                <div className="text-sm font-bold text-gold-400">{order.order_number}</div>
+                <div className="text-sm font-bold text-gold-400">{order.orderNumber}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-silver-500 mb-1">Order Total</div>
@@ -85,16 +81,16 @@ function ThankYouContent() {
               {order.order_items?.map((item: any) => (
                 <div key={item.id} className="flex items-center gap-3 p-2 rounded-lg bg-white/3">
                   <div className="w-10 h-10 rounded-lg bg-dark-300 overflow-hidden flex-shrink-0">
-                    {item.product_image && (
-                      <img src={item.product_image} alt={item.product_name} className="w-full h-full object-cover" />
+                    {item.productImage && (
+                      <img src={item.productImage} alt={item.productName} className="w-full h-full object-cover" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-white truncate">{item.product_name}</div>
-                    <div className="text-xs text-silver-500">Qty: {item.quantity} × ₹{item.unit_price.toLocaleString('en-IN')}</div>
+                    <div className="text-sm text-white truncate">{item.productName}</div>
+                    <div className="text-xs text-silver-500">Qty: {item.quantity} × ₹{item.unitPrice.toLocaleString('en-IN')}</div>
                   </div>
                   <div className="text-sm font-semibold text-gold-400">
-                    ₹{(item.quantity * item.unit_price).toLocaleString('en-IN')}
+                    ₹{(item.quantity * item.unitPrice).toLocaleString('en-IN')}
                   </div>
                 </div>
               ))}
@@ -104,15 +100,15 @@ function ThankYouContent() {
             <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t border-white/5">
               <div>
                 <div className="text-xs text-silver-500 mb-1">Shipping Address</div>
-                <div className="text-sm text-white">{order.shipping_full_name}</div>
-                <div className="text-xs text-silver-400">{order.shipping_line1}</div>
-                <div className="text-xs text-silver-400">{order.shipping_city}, {order.shipping_state} - {order.shipping_pincode}</div>
-                <div className="text-xs text-silver-400">Phone: {order.shipping_phone}</div>
+                <div className="text-sm text-white">{order.shippingFullName}</div>
+                <div className="text-xs text-silver-400">{order.shippingLine1}</div>
+                <div className="text-xs text-silver-400">{order.shippingCity}, {order.shippingState} - {order.shippingPincode}</div>
+                <div className="text-xs text-silver-400">Phone: {order.shippingPhone}</div>
               </div>
               <div>
                 <div className="text-xs text-silver-500 mb-1">Payment</div>
-                <div className="text-sm text-white capitalize">{order.payment_method}</div>
-                <div className="text-xs text-silver-400">Status: {order.payment_status}</div>
+                <div className="text-sm text-white capitalize">{order.paymentMethod}</div>
+                <div className="text-xs text-silver-400">Status: {order.paymentStatus}</div>
                 <div className="flex items-center gap-1.5 mt-2 text-xs text-green-400">
                   <Truck size={12} /> Estimated delivery: 1–3 business days
                 </div>

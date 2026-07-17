@@ -2,33 +2,32 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Gift, Copy, Users, Coins, Share2, CheckCircle, ChevronRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { Gift, Copy, Users, Coins, Share2, CircleCheck as CheckCircle, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 
 interface ReferralCode {
   id: string;
   code: string;
-  reward_per_referral: number;
-  referred_reward: number;
-  uses_count: number;
-  is_active: boolean;
+  rewardPerReferral: number;
+  referredReward: number;
+  usesCount: number;
+  isActive: boolean;
 }
 
 interface ReferralUse {
   id: string;
   status: string;
-  created_at: string;
-  referrer_reward: number | null;
+  createdAt: string;
+  referrerReward: number | null;
 }
 
 interface Credit {
   id: string;
   amount: number;
   description: string;
-  is_used: boolean;
-  created_at: string;
+  isUsed: boolean;
+  createdAt: string;
 }
 
 function generateCode(userId: string): string {
@@ -51,21 +50,16 @@ export function ReferralPanel() {
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const availableCredits = credits.filter((c) => !c.is_used).reduce((s, c) => s + c.amount, 0);
+  const availableCredits = credits.filter((c) => !c.isUsed).reduce((s, c) => s + c.amount, 0);
   const totalEarned = credits.reduce((s, c) => s + c.amount, 0);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
-    const [{ data: code }, { data: usesList }, { data: creditsList }] = await Promise.all([
-      supabase.from('referral_codes').select('*').eq('user_id', user.id).maybeSingle(),
-      supabase.from('referral_uses').select('id, status, created_at, referrer_reward')
-        .eq('referral_code_id', (await supabase.from('referral_codes').select('id').eq('user_id', user.id).maybeSingle()).data?.id ?? '')
-        .order('created_at', { ascending: false }),
-      supabase.from('referral_credits').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-    ]);
-    setMyCode(code);
-    setUses(usesList ?? []);
-    setCredits(creditsList ?? []);
+    const res = await fetch('/api/referrals', { cache: 'no-store' });
+    const data = await res.json();
+    setMyCode(data.referralCode ?? null);
+    setUses(data.referralUses ?? []);
+    setCredits(data.credits ?? []);
     setLoading(false);
   }, [user]);
 
@@ -74,24 +68,15 @@ export function ReferralPanel() {
   const createCode = async () => {
     if (!user) return;
     setCreating(true);
-    const code = generateCode(user.id);
-    const { data, error } = await supabase
-      .from('referral_codes')
-      .insert({ code, reward_per_referral: 50, referred_reward: 25 })
-      .select()
-      .single();
-    if (error) {
-      const uniqueCode = `TS${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      const { data: d2 } = await supabase
-        .from('referral_codes')
-        .insert({ code: uniqueCode, reward_per_referral: 50, referred_reward: 25 })
-        .select().single();
-      setMyCode(d2);
-    } else {
-      setMyCode(data);
-    }
+    const res = await fetch('/api/referrals', { method: 'POST', cache: 'no-store' });
+    const data = await res.json();
     setCreating(false);
-    toast.success('Referral code created!');
+    if (data.referralCode) {
+      setMyCode(data.referralCode);
+      toast.success('Referral code created!');
+    } else {
+      toast.error('Failed to create referral code');
+    }
   };
 
   const copyCode = async () => {
@@ -104,7 +89,7 @@ export function ReferralPanel() {
 
   const shareCode = async () => {
     if (!myCode) return;
-    const text = `🎁 Use my code ${myCode.code} at TS Tech Canopy to get ₹${myCode.referred_reward} off your first order! Shop premium tech accessories at tstechcanopy.com`;
+    const text = `🎁 Use my code ${myCode.code} at TS Tech Canopy to get ₹${myCode.referredReward} off your first order! Shop premium tech accessories at tstechcanopy.com`;
     if (navigator.share) {
       await navigator.share({ text });
     } else {
@@ -170,15 +155,15 @@ export function ReferralPanel() {
         <div className="card-surface rounded-2xl border border-gold-500/15 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-white">Your Referral Code</h3>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${myCode.is_active ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-red-500/15 text-red-400 border border-red-500/20'}`}>
-              {myCode.is_active ? 'Active' : 'Inactive'}
+            <span className={`text-xs px-2 py-0.5 rounded-full ${myCode.isActive ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-red-500/15 text-red-400 border border-red-500/20'}`}>
+              {myCode.isActive ? 'Active' : 'Inactive'}
             </span>
           </div>
 
           {/* Big code display */}
           <div className="relative bg-dark-400 rounded-xl border border-gold-500/20 p-4 mb-4 text-center">
             <div className="text-3xl font-bold tracking-widest gold-text font-mono">{myCode.code}</div>
-            <div className="text-xs text-silver-500 mt-1">{myCode.uses_count} times used</div>
+            <div className="text-xs text-silver-500 mt-1">{myCode.usesCount} times used</div>
           </div>
 
           <div className="flex gap-2">
@@ -199,11 +184,11 @@ export function ReferralPanel() {
 
           <div className="mt-4 grid grid-cols-2 gap-3 text-center">
             <div className="bg-white/3 rounded-xl p-3 border border-white/5">
-              <div className="text-sm font-bold text-gold-400">₹{myCode.reward_per_referral}</div>
+              <div className="text-sm font-bold text-gold-400">₹{myCode.rewardPerReferral}</div>
               <div className="text-[10px] text-silver-500 mt-0.5">You earn per referral</div>
             </div>
             <div className="bg-white/3 rounded-xl p-3 border border-white/5">
-              <div className="text-sm font-bold text-green-400">₹{myCode.referred_reward}</div>
+              <div className="text-sm font-bold text-green-400">₹{myCode.referredReward}</div>
               <div className="text-[10px] text-silver-500 mt-0.5">Friend gets off first order</div>
             </div>
           </div>
@@ -247,13 +232,13 @@ export function ReferralPanel() {
                   <div>
                     <div className="text-xs font-medium text-white">Friend #{i + 1}</div>
                     <div className="text-[10px] text-silver-500">
-                      {new Date(use.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {new Date(use.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </div>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className={`text-xs font-medium capitalize ${use.status === 'credited' ? 'text-green-400' : 'text-yellow-400'}`}>
-                    {use.status === 'credited' ? `+₹${use.referrer_reward}` : 'Pending'}
+                    {use.status === 'credited' ? `+₹${use.referrerReward}` : 'Pending'}
                   </div>
                   <div className="text-[10px] text-silver-600">{use.status}</div>
                 </div>
@@ -277,11 +262,11 @@ export function ReferralPanel() {
                 <div>
                   <div className="text-xs font-medium text-white">{credit.description}</div>
                   <div className="text-[10px] text-silver-500">
-                    {new Date(credit.created_at).toLocaleDateString('en-IN')}
+                    {new Date(credit.createdAt).toLocaleDateString('en-IN')}
                   </div>
                 </div>
-                <div className={`text-sm font-semibold ${credit.is_used ? 'text-silver-600 line-through' : 'text-green-400'}`}>
-                  {credit.is_used ? 'Used' : `+₹${credit.amount}`}
+                <div className={`text-sm font-semibold ${credit.isUsed ? 'text-silver-600 line-through' : 'text-green-400'}`}>
+                  {credit.isUsed ? 'Used' : `+₹${credit.amount}`}
                 </div>
               </div>
             ))}

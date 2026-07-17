@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import type { Product } from '@/lib/database.types';
 
@@ -46,16 +45,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const fetchServerCart = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('cart_items')
-      .select('*, products(*)')
-      .eq('user_id', user.id);
-    if (!error && data) {
-      const mapped: LocalCartItem[] = data
-        .filter((d) => d.products)
-        .map((d) => ({ product: d.products as Product, quantity: d.quantity }));
-      setItems(mapped);
-      saveLocal(mapped);
+    try {
+      const res = await fetch('/api/cart', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        const mapped: LocalCartItem[] = (data.items ?? [])
+          .filter((d: { product: Product | null }) => d.product)
+          .map((d: { product: Product; quantity: number }) => ({ product: d.product, quantity: d.quantity }));
+        setItems(mapped);
+        saveLocal(mapped);
+      }
+    } catch {
+      // ignore
     }
     setLoading(false);
   }, [user]);
@@ -79,12 +80,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
 
     if (user) {
-      const current = items.find((i) => i.product.id === product.id);
-      if (current) {
-        await supabase.from('cart_items').update({ quantity: current.quantity + quantity }).eq('user_id', user.id).eq('product_id', product.id);
-      } else {
-        await supabase.from('cart_items').upsert({ product_id: product.id, quantity }, { onConflict: 'user_id,product_id' });
-      }
+      await fetch('/api/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: product.id, quantity }),
+      });
     }
   };
 
@@ -95,7 +95,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return next;
     });
     if (user) {
-      await supabase.from('cart_items').delete().eq('user_id', user.id).eq('product_id', productId);
+      await fetch(`/api/cart?productId=${productId}`, { method: 'DELETE' });
     }
   };
 
@@ -107,7 +107,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return next;
     });
     if (user) {
-      await supabase.from('cart_items').update({ quantity }).eq('user_id', user.id).eq('product_id', productId);
+      await fetch('/api/cart', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, quantity }),
+      });
     }
   };
 
@@ -115,7 +119,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems([]);
     saveLocal([]);
     if (user) {
-      await supabase.from('cart_items').delete().eq('user_id', user.id);
+      await fetch('/api/cart?clear=true', { method: 'DELETE' });
     }
   };
 

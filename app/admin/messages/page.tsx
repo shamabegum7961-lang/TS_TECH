@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Search, Phone, Mail, Clock, ChevronDown, ChevronUp, RefreshCw, Trash2, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface ContactMessage {
@@ -13,7 +12,7 @@ interface ContactMessage {
   phone: string | null;
   subject: string | null;
   message: string;
-  created_at: string;
+  createdAt: string;
 }
 
 export default function AdminMessagesPage() {
@@ -26,11 +25,9 @@ export default function AdminMessagesPage() {
   const [deleting, setDeleting] = useState(false);
 
   const fetchMessages = async () => {
-    const { data } = await supabase
-      .from('contact_submissions')
-      .select('*')
-      .order('created_at', { ascending: false });
-    setMessages(data ?? []);
+    const res = await fetch('/api/admin/messages', { cache: 'no-store' });
+    const data = await res.json();
+    setMessages(data.messages ?? []);
   };
 
   useEffect(() => {
@@ -46,9 +43,9 @@ export default function AdminMessagesPage() {
   const handleDelete = async () => {
     if (!deleteConfirm) return;
     setDeleting(true);
-    const { error } = await supabase.from('contact_submissions').delete().eq('id', deleteConfirm.id);
+    const res = await fetch(`/api/admin/messages?id=${deleteConfirm.id}`, { method: 'DELETE', cache: 'no-store' });
     setDeleting(false);
-    if (error) {
+    if (!res.ok) {
       toast.error('Failed to delete message');
     } else {
       setMessages((prev) => prev.filter((m) => m.id !== deleteConfirm.id));
@@ -155,7 +152,7 @@ export default function AdminMessagesPage() {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-xs text-silver-600 flex items-center gap-1">
-                            <Clock size={10} /> {formatDate(msg.created_at)}
+                            <Clock size={10} /> {formatDate(msg.createdAt)}
                           </span>
                           {isExpanded ? <ChevronUp size={14} className="text-silver-400" /> : <ChevronDown size={14} className="text-silver-400" />}
                         </div>

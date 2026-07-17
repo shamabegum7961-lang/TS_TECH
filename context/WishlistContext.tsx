@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import type { Product } from '@/lib/database.types';
 
@@ -24,9 +23,14 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const fetchWishlist = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase.from('wishlists').select('product_id').eq('user_id', user.id);
-    if (data) {
-      setWishlistIds(data.map((d) => d.product_id));
+    try {
+      const res = await fetch('/api/wishlist', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setWishlistIds(data.ids ?? []);
+      }
+    } catch {
+      // ignore
     }
     setLoading(false);
   }, [user]);
@@ -36,8 +40,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
       fetchWishlist();
     } else {
       try {
-        const local = JSON.parse(localStorage.getItem(LOCAL_KEY) ?? '[]');
-        setWishlistIds(local);
+        setWishlistIds(JSON.parse(localStorage.getItem(LOCAL_KEY) ?? '[]'));
       } catch {
         setWishlistIds([]);
       }
@@ -51,7 +54,6 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     const next = isCurrentlyIn
       ? wishlistIds.filter((id) => id !== product.id)
       : [...wishlistIds, product.id];
-
     setWishlistIds(next);
 
     if (!user) {
@@ -60,9 +62,13 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     }
 
     if (isCurrentlyIn) {
-      await supabase.from('wishlists').delete().eq('user_id', user.id).eq('product_id', product.id);
+      await fetch(`/api/wishlist?productId=${product.id}`, { method: 'DELETE' });
     } else {
-      await supabase.from('wishlists').insert({ product_id: product.id });
+      await fetch('/api/wishlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: product.id }),
+      });
     }
   };
 

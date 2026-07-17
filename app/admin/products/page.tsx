@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Plus, Search, Pencil, Trash2, Package, ToggleLeft, ToggleRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import type { Product, Category } from '@/lib/database.types';
 import { toast } from 'sonner';
 
@@ -17,33 +16,33 @@ export default function AdminProductsPage() {
 
   const fetchProducts = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('products')
-      .select('*, categories(*)')
-      .order('created_at', { ascending: false });
-    setProducts((data as any[]) ?? []);
+    const res = await fetch('/api/admin/products', { cache: 'no-store' });
+    const data = await res.json();
+    setProducts(data.products ?? []);
     setLoading(false);
   };
 
   useEffect(() => { fetchProducts(); }, []);
 
   const toggleActive = async (product: Product) => {
-    const { error } = await supabase
-      .from('products')
-      .update({ is_active: !product.is_active })
-      .eq('id', product.id);
-    if (!error) {
+    const res = await fetch('/api/admin/products', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: product.id, data: { isActive: !product.isActive } }),
+      cache: 'no-store',
+    });
+    if (res.ok) {
       setProducts((prev) =>
-        prev.map((p) => p.id === product.id ? { ...p, is_active: !product.is_active } : p)
+        prev.map((p) => p.id === product.id ? { ...p, isActive: !product.isActive } : p)
       );
-      toast.success(`Product ${!product.is_active ? 'activated' : 'deactivated'}`);
+      toast.success(`Product ${!product.isActive ? 'activated' : 'deactivated'}`);
     }
   };
 
   const deleteProduct = async (id: string) => {
     setDeletingId(id);
-    const { error } = await supabase.from('products').delete().eq('id', id);
-    if (!error) {
+    const res = await fetch(`/api/admin/products?id=${id}`, { method: 'DELETE', cache: 'no-store' });
+    if (res.ok) {
       setProducts((prev) => prev.filter((p) => p.id !== id));
       toast.success('Product deleted');
     } else {
@@ -135,8 +134,8 @@ export default function AdminProductsPage() {
                       <div className="text-sm font-medium text-white truncate">{product.name}</div>
                       <div className="text-xs text-silver-500 flex items-center gap-1.5">
                         {product.brand && <span className="text-gold-500">{product.brand}</span>}
-                        <span className={`w-1.5 h-1.5 rounded-full inline-block ${product.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
-                        {product.is_active ? 'Active' : 'Hidden'}
+                        <span className={`w-1.5 h-1.5 rounded-full inline-block ${product.isActive ? 'bg-green-500' : 'bg-red-500'}`} />
+                        {product.isActive ? 'Active' : 'Hidden'}
                       </div>
                     </div>
                   </div>
@@ -149,7 +148,7 @@ export default function AdminProductsPage() {
                   {/* Price / Stock */}
                   <div>
                     <div className="text-sm font-semibold text-gold-400">₹{product.price.toLocaleString('en-IN')}</div>
-                    <div className="text-xs text-silver-500">Stock: {product.stock_quantity}</div>
+                    <div className="text-xs text-silver-500">Stock: {product.stockQuantity}</div>
                   </div>
 
                   {/* Actions */}
@@ -157,10 +156,10 @@ export default function AdminProductsPage() {
                     {/* Toggle active */}
                     <button
                       onClick={() => toggleActive(product)}
-                      className={`p-1.5 rounded-lg transition-colors ${product.is_active ? 'text-green-400 hover:bg-green-400/10' : 'text-silver-600 hover:bg-white/5'}`}
-                      title={product.is_active ? 'Deactivate' : 'Activate'}
+                      className={`p-1.5 rounded-lg transition-colors ${product.isActive ? 'text-green-400 hover:bg-green-400/10' : 'text-silver-600 hover:bg-white/5'}`}
+                      title={product.isActive ? 'Deactivate' : 'Activate'}
                     >
-                      {product.is_active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                      {product.isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                     </button>
 
                     {/* Edit */}

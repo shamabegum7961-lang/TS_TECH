@@ -8,7 +8,6 @@ import {
   LayoutDashboard, Package, MessageSquare, LogOut,
   ChevronRight, Shield, Menu, X,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
 
@@ -22,28 +21,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, loading: authLoading, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) { router.replace('/login?redirect=/admin'); return; }
-
-    supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data?.is_admin) {
-          setIsAdmin(false);
-        } else {
-          setIsAdmin(true);
-        }
-      });
   }, [user, authLoading, router]);
 
-  if (authLoading || isAdmin === null) {
+  if (authLoading || !user) {
     return (
       <div className="min-h-screen bg-dark-700 flex items-center justify-center">
         <div className="w-8 h-8 rounded-full border-2 border-gold-500 border-t-transparent animate-spin" />
@@ -51,7 +36,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (isAdmin === false) {
+  if (!user?.isAdmin) {
     return (
       <div className="min-h-screen bg-dark-700 flex flex-col items-center justify-center gap-4 text-center px-4">
         <Shield size={48} className="text-red-400" />

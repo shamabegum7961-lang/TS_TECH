@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save, Plus, X, Trash2, Package, Zap, Tag as TagIcon } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import type { Category, ColorVariant } from '@/lib/database.types';
 import { toast } from 'sonner';
 
@@ -12,19 +11,19 @@ interface EditForm {
   name: string;
   description: string;
   price: string;
-  compare_price: string;
+  comparePrice: string;
   brand: string;
   model: string;
-  category_id: string;
-  stock_quantity: string;
-  warranty_info: string;
-  is_featured: boolean;
-  is_active: boolean;
+  categoryId: string;
+  stockQuantity: string;
+  warrantyInfo: string;
+  isFeatured: boolean;
+  isActive: boolean;
   images: string[];
-  color_variants: ColorVariant[];
-  in_the_box: string[];
-  fast_delivery: boolean;
-  is_daily_deal: boolean;
+  colorVariants: ColorVariant[];
+  inTheBox: string[];
+  fastDelivery: boolean;
+  isDailyDeal: boolean;
   tags: string;
   specifications: string;
 }
@@ -66,62 +65,63 @@ export default function EditProductPage() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('products').select('*').eq('id', id).single(),
-      supabase.from('categories').select('*').order('display_order'),
-    ]).then(([{ data: product }, { data: cats }]) => {
+      fetch(`/api/products/manage?id=${id}`, { cache: 'no-store' }).then((r) => r.json()),
+      fetch('/api/categories', { cache: 'no-store' }).then((r) => r.json()),
+    ]).then(([productRes, catsRes]) => {
+      const product = productRes.product;
       if (product) {
-        const variants = (product.color_variants as ColorVariant[] | null) ?? [];
+        const variants = (product.colorVariants as ColorVariant[] | null) ?? [];
         setForm({
           name: product.name,
           description: product.description ?? '',
           price: String(product.price),
-          compare_price: product.compare_price ? String(product.compare_price) : '',
+          comparePrice: product.comparePrice ? String(product.comparePrice) : '',
           brand: product.brand ?? '',
           model: product.model ?? '',
-          category_id: product.category_id ?? '',
-          stock_quantity: String(product.stock_quantity),
-          warranty_info: product.warranty_info ?? '',
-          is_featured: product.is_featured,
-          is_active: product.is_active,
+          categoryId: product.categoryId ?? '',
+          stockQuantity: String(product.stockQuantity),
+          warrantyInfo: product.warrantyInfo ?? '',
+          isFeatured: product.isFeatured,
+          isActive: product.isActive,
           images: (product.images as string[]).length ? (product.images as string[]) : [''],
-          color_variants: variants.length ? variants : [],
-          in_the_box: (product.in_the_box as string[] | null) ?? [],
-          fast_delivery: product.fast_delivery ?? false,
-          is_daily_deal: product.is_daily_deal ?? false,
+          colorVariants: variants.length ? variants : [],
+          inTheBox: (product.inTheBox as string[] | null) ?? [],
+          fastDelivery: product.fastDelivery ?? false,
+          isDailyDeal: product.isDailyDeal ?? false,
           tags: product.tags?.join(', ') ?? '',
           specifications: product.specifications ? JSON.stringify(product.specifications, null, 2) : '',
         });
       }
-      setCategories(cats ?? []);
+      setCategories(catsRes.categories ?? []);
       setLoading(false);
     });
   }, [id]);
 
   const addColorVariant = () => {
-    setForm((p) => p ? ({ ...p, color_variants: [...p.color_variants, { color: '', images: [''] }] }) : p);
+    setForm((p) => p ? ({ ...p, colorVariants: [...p.colorVariants, { color: '', images: [''] }] }) : p);
   };
   const removeColorVariant = (idx: number) => {
-    setForm((p) => p ? ({ ...p, color_variants: p.color_variants.filter((_, i) => i !== idx) }) : p);
+    setForm((p) => p ? ({ ...p, colorVariants: p.colorVariants.filter((_, i) => i !== idx) }) : p);
   };
   const updateVariantColor = (idx: number, color: string) => {
-    setForm((p) => p ? ({ ...p, color_variants: p.color_variants.map((v, i) => i === idx ? { ...v, color } : v) }) : p);
+    setForm((p) => p ? ({ ...p, colorVariants: p.colorVariants.map((v, i) => i === idx ? { ...v, color } : v) }) : p);
   };
   const addVariantImage = (idx: number) => {
-    setForm((p) => p ? ({ ...p, color_variants: p.color_variants.map((v, i) => i === idx ? { ...v, images: [...v.images, ''] } : v) }) : p);
+    setForm((p) => p ? ({ ...p, colorVariants: p.colorVariants.map((v, i) => i === idx ? { ...v, images: [...v.images, ''] } : v) }) : p);
   };
   const updateVariantImage = (vIdx: number, imgIdx: number, url: string) => {
-    setForm((p) => p ? ({ ...p, color_variants: p.color_variants.map((v, i) => i === vIdx ? { ...v, images: v.images.map((img, j) => j === imgIdx ? url : img) } : v) }) : p);
+    setForm((p) => p ? ({ ...p, colorVariants: p.colorVariants.map((v, i) => i === vIdx ? { ...v, images: v.images.map((img, j) => j === imgIdx ? url : img) } : v) }) : p);
   };
   const removeVariantImage = (vIdx: number, imgIdx: number) => {
-    setForm((p) => p ? ({ ...p, color_variants: p.color_variants.map((v, i) => i === vIdx ? { ...v, images: v.images.filter((_, j) => j !== imgIdx) } : v) }) : p);
+    setForm((p) => p ? ({ ...p, colorVariants: p.colorVariants.map((v, i) => i === vIdx ? { ...v, images: v.images.filter((_, j) => j !== imgIdx) } : v) }) : p);
   };
   const addBoxItem = () => {
     if (!boxItem.trim() || !form) return;
-    setForm((p) => p ? ({ ...p, in_the_box: [...p.in_the_box, boxItem.trim()] }) : p);
+    setForm((p) => p ? ({ ...p, inTheBox: [...p.inTheBox, boxItem.trim()] }) : p);
     setBoxItem('');
   };
   const removeBoxItem = (idx: number) => {
-    setForm((p) => p ? ({ ...p, in_the_box: p.in_the_box.filter((_, i) => i !== idx) }) : p);
+    setForm((p) => p ? ({ ...p, inTheBox: p.inTheBox.filter((_, i) => i !== idx) }) : p);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -133,38 +133,43 @@ export default function EditProductPage() {
     try { if (form.specifications.trim()) specs = JSON.parse(form.specifications); } catch {}
 
     const images = form.images.filter((i) => i.trim());
-    const colorVariants = form.color_variants
+    const colorVariants = form.colorVariants
       .filter((v) => v.color.trim())
       .map((v) => ({ color: v.color.trim(), images: v.images.filter((i) => i.trim()) }));
 
-    const { error } = await supabase
-      .from('products')
-      .update({
-        name: form.name.trim(),
-        description: form.description.trim() || null,
-        price: +form.price,
-        compare_price: form.compare_price ? +form.compare_price : null,
-        images: images,
-        category_id: form.category_id || null,
-        brand: form.brand.trim() || null,
-        model: form.model.trim() || null,
-        color_variants: colorVariants,
-        in_the_box: form.in_the_box.length ? form.in_the_box : null,
-        fast_delivery: form.fast_delivery,
-        is_daily_deal: form.is_daily_deal,
-        stock_quantity: +form.stock_quantity,
-        is_featured: form.is_featured,
-        is_active: form.is_active,
-        tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : null,
-        warranty_info: form.warranty_info.trim() || null,
-        specifications: specs,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
+    const productData = {
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      price: +form.price,
+      comparePrice: form.comparePrice ? +form.comparePrice : null,
+      images: images,
+      categoryId: form.categoryId || null,
+      brand: form.brand.trim() || null,
+      model: form.model.trim() || null,
+      colorVariants: colorVariants,
+      inTheBox: form.inTheBox.length ? form.inTheBox : null,
+      fastDelivery: form.fastDelivery,
+      isDailyDeal: form.isDailyDeal,
+      stockQuantity: +form.stockQuantity,
+      isFeatured: form.isFeatured,
+      isActive: form.isActive,
+      tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : null,
+      warrantyInfo: form.warrantyInfo.trim() || null,
+      specifications: specs,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await fetch('/api/products/manage', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, data: productData }),
+      cache: 'no-store',
+    });
 
     setSaving(false);
-    if (error) {
-      toast.error('Failed to update: ' + error.message);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      toast.error('Failed to update: ' + (errData.error || 'Unknown error'));
     } else {
       toast.success('Product updated!');
       router.push('/admin/products');
@@ -206,7 +211,7 @@ export default function EditProductPage() {
           </Field>
           <div className="grid sm:grid-cols-3 gap-4">
             <Field label="Category">
-              <select value={form.category_id} onChange={set('category_id')} className="w-full input-dark px-4 py-3 rounded-xl text-sm">
+              <select value={form.categoryId} onChange={set('categoryId')} className="w-full input-dark px-4 py-3 rounded-xl text-sm">
                 <option value="">No category</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -228,18 +233,18 @@ export default function EditProductPage() {
               <input type="number" min="0" step="0.01" value={form.price} onChange={set('price')} className="w-full input-dark px-4 py-3 rounded-xl text-sm" required />
             </Field>
             <Field label="Original Price (₹)">
-              <input type="number" min="0" step="0.01" value={form.compare_price} onChange={set('compare_price')} className="w-full input-dark px-4 py-3 rounded-xl text-sm" />
+              <input type="number" min="0" step="0.01" value={form.comparePrice} onChange={set('comparePrice')} className="w-full input-dark px-4 py-3 rounded-xl text-sm" />
             </Field>
             <Field label="Stock" required>
-              <input type="number" min="0" value={form.stock_quantity} onChange={set('stock_quantity')} className="w-full input-dark px-4 py-3 rounded-xl text-sm" required />
+              <input type="number" min="0" value={form.stockQuantity} onChange={set('stockQuantity')} className="w-full input-dark px-4 py-3 rounded-xl text-sm" required />
             </Field>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
             <Field label="Warranty">
-              <input type="text" value={form.warranty_info} onChange={set('warranty_info')} className="w-full input-dark px-4 py-3 rounded-xl text-sm" />
+              <input type="text" value={form.warrantyInfo} onChange={set('warrantyInfo')} className="w-full input-dark px-4 py-3 rounded-xl text-sm" />
             </Field>
             <div className="flex items-end">
-              <Toggle checked={form.fast_delivery} onChange={(v) => setForm((p) => p ? ({ ...p, fast_delivery: v }) : p)} label="Fast Delivery" desc="Delivered within a day" icon={<Zap size={12} className="text-gold-500" />} />
+              <Toggle checked={form.fastDelivery} onChange={(v) => setForm((p) => p ? ({ ...p, fastDelivery: v }) : p)} label="Fast Delivery" desc="Delivered within a day" icon={<Zap size={12} className="text-gold-500" />} />
             </div>
           </div>
         </div>
@@ -288,10 +293,10 @@ export default function EditProductPage() {
               <Plus size={13} /> Add Color Variant
             </button>
           </div>
-          {form.color_variants.length === 0 && (
+          {form.colorVariants.length === 0 && (
             <div className="text-center py-6 text-sm text-silver-600">No color variants added.</div>
           )}
-          {form.color_variants.map((variant, vIdx) => (
+          {form.colorVariants.map((variant, vIdx) => (
             <div key={vIdx} className="bg-white/3 rounded-xl border border-white/5 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <input type="text" value={variant.color}
@@ -349,9 +354,9 @@ export default function EditProductPage() {
               <Plus size={14} /> Add
             </button>
           </div>
-          {form.in_the_box.length > 0 && (
+          {form.inTheBox.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {form.in_the_box.map((item, i) => (
+              {form.inTheBox.map((item, i) => (
                 <div key={i} className="flex items-center gap-2 bg-gold-500/10 border border-gold-500/20 rounded-lg px-3 py-1.5">
                   <Package size={12} className="text-gold-500" />
                   <span className="text-sm text-white">{item}</span>
@@ -381,9 +386,9 @@ export default function EditProductPage() {
         <div className="card-surface rounded-2xl border border-white/5 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-white border-b border-white/5 pb-3">Visibility & Flags</h2>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Toggle checked={form.is_active} onChange={(v) => setForm((p) => p ? ({ ...p, is_active: v }) : p)} label="Active / Visible" desc="Show on store" />
-            <Toggle checked={form.is_featured} onChange={(v) => setForm((p) => p ? ({ ...p, is_featured: v }) : p)} label="Featured Product" desc="Display on homepage" />
-            <Toggle checked={form.is_daily_deal} onChange={(v) => setForm((p) => p ? ({ ...p, is_daily_deal: v }) : p)} label="Daily Deal" desc="Show in daily deals banner" icon={<TagIcon size={12} className="text-gold-500" />} />
+            <Toggle checked={form.isActive} onChange={(v) => setForm((p) => p ? ({ ...p, isActive: v }) : p)} label="Active / Visible" desc="Show on store" />
+            <Toggle checked={form.isFeatured} onChange={(v) => setForm((p) => p ? ({ ...p, isFeatured: v }) : p)} label="Featured Product" desc="Display on homepage" />
+            <Toggle checked={form.isDailyDeal} onChange={(v) => setForm((p) => p ? ({ ...p, isDailyDeal: v }) : p)} label="Daily Deal" desc="Show in daily deals banner" icon={<TagIcon size={12} className="text-gold-500" />} />
           </div>
         </div>
 

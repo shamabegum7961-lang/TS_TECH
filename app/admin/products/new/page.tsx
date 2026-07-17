@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, X, Package, Save, Zap, Tag as TagIcon, Trash2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import type { Category, ColorVariant } from '@/lib/database.types';
 import { toast } from 'sonner';
 
@@ -12,30 +11,30 @@ interface ProductForm {
   name: string;
   description: string;
   price: string;
-  compare_price: string;
+  comparePrice: string;
   brand: string;
   model: string;
-  category_id: string;
-  stock_quantity: string;
-  warranty_info: string;
-  is_featured: boolean;
-  is_active: boolean;
+  categoryId: string;
+  stockQuantity: string;
+  warrantyInfo: string;
+  isFeatured: boolean;
+  isActive: boolean;
   images: string[];
-  color_variants: ColorVariant[];
-  in_the_box: string[];
-  fast_delivery: boolean;
-  is_daily_deal: boolean;
+  colorVariants: ColorVariant[];
+  inTheBox: string[];
+  fastDelivery: boolean;
+  isDailyDeal: boolean;
   tags: string;
   specifications: string;
 }
 
 const EMPTY_FORM: ProductForm = {
-  name: '', description: '', price: '', compare_price: '',
-  brand: '', model: '', category_id: '',
-  stock_quantity: '0', warranty_info: '',
-  is_featured: false, is_active: true,
-  images: [''], color_variants: [], in_the_box: [],
-  fast_delivery: false, is_daily_deal: false,
+  name: '', description: '', price: '', comparePrice: '',
+  brand: '', model: '', categoryId: '',
+  stockQuantity: '0', warrantyInfo: '',
+  isFeatured: false, isActive: true,
+  images: [''], colorVariants: [], inTheBox: [],
+  fastDelivery: false, isDailyDeal: false,
   tags: '', specifications: '',
 };
 
@@ -81,7 +80,9 @@ export default function NewProductPage() {
   const [boxItem, setBoxItem] = useState('');
 
   useEffect(() => {
-    supabase.from('categories').select('*').order('display_order').then(({ data }) => setCategories(data ?? []));
+    fetch('/api/categories', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => setCategories(data.categories ?? []));
   }, []);
 
   const set = (key: keyof ProductForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -93,38 +94,38 @@ export default function NewProductPage() {
     const e: Partial<Record<keyof ProductForm, string>> = {};
     if (!form.name.trim()) e.name = 'Required';
     if (!form.price || isNaN(+form.price) || +form.price <= 0) e.price = 'Valid price required';
-    if (form.compare_price && (isNaN(+form.compare_price) || +form.compare_price <= +form.price))
-      e.compare_price = 'Must be greater than price';
-    if (!form.stock_quantity || isNaN(+form.stock_quantity)) e.stock_quantity = 'Required';
+    if (form.comparePrice && (isNaN(+form.comparePrice) || +form.comparePrice <= +form.price))
+      e.comparePrice = 'Must be greater than price';
+    if (!form.stockQuantity || isNaN(+form.stockQuantity)) e.stockQuantity = 'Required';
     return e;
   };
 
   const addColorVariant = () => {
-    setForm((p) => ({ ...p, color_variants: [...p.color_variants, { color: '', images: [''] }] }));
+    setForm((p) => ({ ...p, colorVariants: [...p.colorVariants, { color: '', images: [''] }] }));
   };
 
   const removeColorVariant = (idx: number) => {
-    setForm((p) => ({ ...p, color_variants: p.color_variants.filter((_, i) => i !== idx) }));
+    setForm((p) => ({ ...p, colorVariants: p.colorVariants.filter((_, i) => i !== idx) }));
   };
 
   const updateVariantColor = (idx: number, color: string) => {
     setForm((p) => ({
       ...p,
-      color_variants: p.color_variants.map((v, i) => i === idx ? { ...v, color } : v),
+      colorVariants: p.colorVariants.map((v, i) => i === idx ? { ...v, color } : v),
     }));
   };
 
   const addVariantImage = (idx: number) => {
     setForm((p) => ({
       ...p,
-      color_variants: p.color_variants.map((v, i) => i === idx ? { ...v, images: [...v.images, ''] } : v),
+      colorVariants: p.colorVariants.map((v, i) => i === idx ? { ...v, images: [...v.images, ''] } : v),
     }));
   };
 
   const updateVariantImage = (vIdx: number, imgIdx: number, url: string) => {
     setForm((p) => ({
       ...p,
-      color_variants: p.color_variants.map((v, i) =>
+      colorVariants: p.colorVariants.map((v, i) =>
         i === vIdx ? { ...v, images: v.images.map((img, j) => j === imgIdx ? url : img) } : v
       ),
     }));
@@ -133,7 +134,7 @@ export default function NewProductPage() {
   const removeVariantImage = (vIdx: number, imgIdx: number) => {
     setForm((p) => ({
       ...p,
-      color_variants: p.color_variants.map((v, i) =>
+      colorVariants: p.colorVariants.map((v, i) =>
         i === vIdx ? { ...v, images: v.images.filter((_, j) => j !== imgIdx) } : v
       ),
     }));
@@ -141,12 +142,12 @@ export default function NewProductPage() {
 
   const addBoxItem = () => {
     if (!boxItem.trim()) return;
-    setForm((p) => ({ ...p, in_the_box: [...p.in_the_box, boxItem.trim()] }));
+    setForm((p) => ({ ...p, inTheBox: [...p.inTheBox, boxItem.trim()] }));
     setBoxItem('');
   };
 
   const removeBoxItem = (idx: number) => {
-    setForm((p) => ({ ...p, in_the_box: p.in_the_box.filter((_, i) => i !== idx) }));
+    setForm((p) => ({ ...p, inTheBox: p.inTheBox.filter((_, i) => i !== idx) }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -157,45 +158,52 @@ export default function NewProductPage() {
     setSaving(true);
 
     let slug = slugify(form.name);
-    const { data: existing } = await supabase.from('products').select('slug').eq('slug', slug).maybeSingle();
-    if (existing) slug = `${slug}-${Date.now()}`;
+    const slugRes = await fetch(`/api/products/manage?slug_check=${encodeURIComponent(slug)}`, { cache: 'no-store' });
+    const slugData = await slugRes.json();
+    if (slugData.exists) slug = `${slug}-${Date.now()}`;
 
     let specs: Record<string, string> = {};
     try { if (form.specifications.trim()) specs = JSON.parse(form.specifications); } catch {}
 
     const images = form.images.filter((img) => img.trim());
-    const colorVariants = form.color_variants
+    const colorVariants = form.colorVariants
       .filter((v) => v.color.trim())
       .map((v) => ({ color: v.color.trim(), images: v.images.filter((i) => i.trim()) }));
 
-    const { error } = await supabase
-      .from('products')
-      .insert({
-        name: form.name.trim(),
-        slug,
-        description: form.description.trim() || null,
-        price: +form.price,
-        compare_price: form.compare_price ? +form.compare_price : null,
-        images: images.length ? images : [],
-        category_id: form.category_id || null,
-        brand: form.brand.trim() || null,
-        model: form.model.trim() || null,
-        color_variants: colorVariants,
-        in_the_box: form.in_the_box.length ? form.in_the_box : null,
-        fast_delivery: form.fast_delivery,
-        is_daily_deal: form.is_daily_deal,
-        stock_quantity: +form.stock_quantity,
-        is_featured: form.is_featured,
-        is_active: form.is_active,
-        tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : null,
-        warranty_info: form.warranty_info.trim() || null,
-        specifications: specs,
-      });
+    const productData = {
+      name: form.name.trim(),
+      slug,
+      description: form.description.trim() || null,
+      price: +form.price,
+      comparePrice: form.comparePrice ? +form.comparePrice : null,
+      images: images.length ? images : [],
+      categoryId: form.categoryId || null,
+      brand: form.brand.trim() || null,
+      model: form.model.trim() || null,
+      colorVariants: colorVariants,
+      inTheBox: form.inTheBox.length ? form.inTheBox : null,
+      fastDelivery: form.fastDelivery,
+      isDailyDeal: form.isDailyDeal,
+      stockQuantity: +form.stockQuantity,
+      isFeatured: form.isFeatured,
+      isActive: form.isActive,
+      tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : null,
+      warrantyInfo: form.warrantyInfo.trim() || null,
+      specifications: specs,
+    };
+
+    const res = await fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isAdmin: true, data: productData }),
+      cache: 'no-store',
+    });
 
     setSaving(false);
 
-    if (error) {
-      toast.error('Failed to save product: ' + error.message);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      toast.error('Failed to save product: ' + (errData.error || 'Unknown error'));
     } else {
       toast.success('Product created successfully!');
       router.push('/admin/products');
@@ -232,7 +240,7 @@ export default function NewProductPage() {
 
           <div className="grid sm:grid-cols-3 gap-4">
             <Field label="Category">
-              <select value={form.category_id} onChange={set('category_id')} className="w-full input-dark px-4 py-3 rounded-xl text-sm">
+              <select value={form.categoryId} onChange={set('categoryId')} className="w-full input-dark px-4 py-3 rounded-xl text-sm">
                 <option value="">No category</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -256,25 +264,25 @@ export default function NewProductPage() {
               <input type="number" min="0" step="0.01" value={form.price} onChange={set('price')} placeholder="e.g. 699"
                 className={`w-full input-dark px-4 py-3 rounded-xl text-sm ${errors.price ? 'border-red-500/50' : ''}`} />
             </Field>
-            <Field label="Original/MRP Price (₹)" error={errors.compare_price}>
-              <input type="number" min="0" step="0.01" value={form.compare_price} onChange={set('compare_price')} placeholder="e.g. 1199"
-                className={`w-full input-dark px-4 py-3 rounded-xl text-sm ${errors.compare_price ? 'border-red-500/50' : ''}`} />
+            <Field label="Original/MRP Price (₹)" error={errors.comparePrice}>
+              <input type="number" min="0" step="0.01" value={form.comparePrice} onChange={set('comparePrice')} placeholder="e.g. 1199"
+                className={`w-full input-dark px-4 py-3 rounded-xl text-sm ${errors.comparePrice ? 'border-red-500/50' : ''}`} />
               <p className="text-[10px] text-silver-600 mt-1">Used to show discount %</p>
             </Field>
-            <Field label="Stock Quantity" error={errors.stock_quantity} required>
-              <input type="number" min="0" value={form.stock_quantity} onChange={set('stock_quantity')} placeholder="e.g. 50"
-                className={`w-full input-dark px-4 py-3 rounded-xl text-sm ${errors.stock_quantity ? 'border-red-500/50' : ''}`} />
+            <Field label="Stock Quantity" error={errors.stockQuantity} required>
+              <input type="number" min="0" value={form.stockQuantity} onChange={set('stockQuantity')} placeholder="e.g. 50"
+                className={`w-full input-dark px-4 py-3 rounded-xl text-sm ${errors.stockQuantity ? 'border-red-500/50' : ''}`} />
             </Field>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
             <Field label="Warranty Info">
-              <input type="text" value={form.warranty_info} onChange={set('warranty_info')} placeholder="e.g. 6 months warranty"
+              <input type="text" value={form.warrantyInfo} onChange={set('warrantyInfo')} placeholder="e.g. 6 months warranty"
                 className="w-full input-dark px-4 py-3 rounded-xl text-sm" />
             </Field>
             <div className="flex items-end">
               <Toggle
-                checked={form.fast_delivery}
-                onChange={(v) => setForm((p) => ({ ...p, fast_delivery: v }))}
+                checked={form.fastDelivery}
+                onChange={(v) => setForm((p) => ({ ...p, fastDelivery: v }))}
                 label="Fast Delivery"
                 desc="Delivered within a day"
                 icon={<Zap size={12} className="text-gold-500" />}
@@ -334,13 +342,13 @@ export default function NewProductPage() {
           </div>
           <p className="text-xs text-silver-500">Add color variants with their own set of images. Users can switch between colors on the product page.</p>
 
-          {form.color_variants.length === 0 && (
+          {form.colorVariants.length === 0 && (
             <div className="text-center py-6 text-sm text-silver-600">
               No color variants added. Click &quot;Add Color Variant&quot; to start.
             </div>
           )}
 
-          {form.color_variants.map((variant, vIdx) => (
+          {form.colorVariants.map((variant, vIdx) => (
             <div key={vIdx} className="bg-white/3 rounded-xl border border-white/5 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <input
@@ -405,9 +413,9 @@ export default function NewProductPage() {
               <Plus size={14} /> Add
             </button>
           </div>
-          {form.in_the_box.length > 0 && (
+          {form.inTheBox.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {form.in_the_box.map((item, i) => (
+              {form.inTheBox.map((item, i) => (
                 <div key={i} className="flex items-center gap-2 bg-gold-500/10 border border-gold-500/20 rounded-lg px-3 py-1.5">
                   <Package size={12} className="text-gold-500" />
                   <span className="text-sm text-white">{item}</span>
@@ -439,9 +447,9 @@ export default function NewProductPage() {
         <div className="card-surface rounded-2xl border border-white/5 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-white border-b border-white/5 pb-3">Visibility & Flags</h2>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Toggle checked={form.is_active} onChange={(v) => setForm((p) => ({ ...p, is_active: v }))} label="Active / Visible" desc="Show on store" />
-            <Toggle checked={form.is_featured} onChange={(v) => setForm((p) => ({ ...p, is_featured: v }))} label="Featured Product" desc="Display on homepage" />
-            <Toggle checked={form.is_daily_deal} onChange={(v) => setForm((p) => ({ ...p, is_daily_deal: v }))} label="Daily Deal" desc="Show in daily deals banner" icon={<TagIcon size={12} className="text-gold-500" />} />
+            <Toggle checked={form.isActive} onChange={(v) => setForm((p) => ({ ...p, isActive: v }))} label="Active / Visible" desc="Show on store" />
+            <Toggle checked={form.isFeatured} onChange={(v) => setForm((p) => ({ ...p, isFeatured: v }))} label="Featured Product" desc="Display on homepage" />
+            <Toggle checked={form.isDailyDeal} onChange={(v) => setForm((p) => ({ ...p, isDailyDeal: v }))} label="Daily Deal" desc="Show in daily deals banner" icon={<TagIcon size={12} className="text-gold-500" />} />
           </div>
         </div>
 

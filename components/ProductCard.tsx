@@ -26,20 +26,20 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const [activeColor, setActiveColor] = useState(0);
 
   const wishlisted = isInWishlist(product.id);
-  const colorVariants = ((product.color_variants as ColorVariant[] | null) ?? []).filter((v) => v.color && v.images.length > 0);
+  const colorVariants = ((product.colorVariants as ColorVariant[] | null) ?? []).filter((v) => v.color && v.images.length > 0);
   const generalImages = (product.images ?? []) as string[];
   const cardImage = colorVariants.length > 0 && colorVariants[activeColor]?.images?.[0]
     ? colorVariants[activeColor].images[0]
     : (!imgError && generalImages?.[0] ? generalImages[0] : null);
 
-  const discount = product.compare_price
-    ? Math.round(((product.compare_price - product.price) / product.compare_price) * 100)
+  const discount = product.comparePrice
+    ? Math.round(((product.comparePrice - product.price) / product.comparePrice) * 100)
     : null;
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (product.stock_quantity === 0) return;
+    if (product.stockQuantity === 0) return;
     setAdding(true);
     await addToCart(product);
     setAdding(false);
@@ -49,7 +49,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const handleBuyNow = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (product.stock_quantity === 0) return;
+    if (product.stockQuantity === 0) return;
     setBuying(true);
     await addToCart(product);
     setBuying(false);
@@ -118,17 +118,17 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             </button>
 
             {/* Fast delivery badge — below heart, right side */}
-            {product.fast_delivery && (
+            {product.fastDelivery && (
               <div className="absolute top-12 right-2.5 flex items-center gap-0.5 bg-green-500/20 backdrop-blur-sm text-green-400 text-[9px] font-semibold px-2 py-0.5 rounded-full border border-green-500/30">
                 <Zap size={8} /> 1-Day
               </div>
             )}
 
             {/* Stock badge — below heart, right side (only if low stock and not fast delivery) */}
-            {product.stock_quantity <= 5 && product.stock_quantity > 0 && !product.fast_delivery && (
+            {product.stockQuantity <= 5 && product.stockQuantity > 0 && !product.fastDelivery && (
               <div className="absolute top-12 right-2.5">
                 <span className="bg-red-900/70 backdrop-blur-sm text-red-300 text-[9px] font-medium px-2 py-0.5 rounded-full border border-red-800/40">
-                  Only {product.stock_quantity} left
+                  Only {product.stockQuantity} left
                 </span>
               </div>
             )}
@@ -162,15 +162,15 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                 >
                   <button
                     onClick={handleAddToCart}
-                    disabled={adding || product.stock_quantity === 0}
+                    disabled={adding || product.stockQuantity === 0}
                     className="flex-1 py-2.5 bg-dark-700/90 backdrop-blur-sm text-gold-400 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-dark-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-gold-500/30"
                   >
                     <ShoppingCart size={13} />
-                    {adding ? '...' : product.stock_quantity === 0 ? 'Sold Out' : 'Add'}
+                    {adding ? '...' : product.stockQuantity === 0 ? 'Sold Out' : 'Add'}
                   </button>
                   <button
                     onClick={handleBuyNow}
-                    disabled={buying || product.stock_quantity === 0}
+                    disabled={buying || product.stockQuantity === 0}
                     className="flex-1 py-2.5 bg-gold-500 text-dark-700 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-gold-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Zap size={13} />
@@ -208,9 +208,9 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                     <span className="text-base font-bold text-gold-400">
                       ₹{product.price.toLocaleString('en-IN')}
                     </span>
-                    {product.compare_price && (
+                    {product.comparePrice && (
                       <span className="text-xs text-silver-600 line-through">
-                        ₹{product.compare_price.toLocaleString('en-IN')}
+                        ₹{product.comparePrice.toLocaleString('en-IN')}
                       </span>
                     )}
                   </motion.div>
@@ -223,7 +223,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                     transition={{ duration: 0.15 }}
                     className="flex flex-col"
                   >
-                    {product.compare_price ? (
+                    {product.comparePrice ? (
                       <div className="flex items-center gap-2">
                         <motion.span
                           initial={{ opacity: 0, x: -4 }}
@@ -240,7 +240,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                             style={{ transformOrigin: 'left' }}
                             className="text-xs text-red-400/70 line-through"
                           >
-                            ₹{product.compare_price.toLocaleString('en-IN')}
+                            ₹{product.comparePrice.toLocaleString('en-IN')}
                           </motion.span>
                           <motion.span
                             initial={{ opacity: 0 }}
@@ -248,7 +248,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
                             transition={{ delay: 0.1 }}
                             className="text-[10px] text-green-400 font-semibold leading-none"
                           >
-                            Save ₹{(product.compare_price - product.price).toLocaleString('en-IN')}
+                            Save ₹{(product.comparePrice - product.price).toLocaleString('en-IN')}
                           </motion.span>
                         </div>
                       </div>
@@ -262,7 +262,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
               </AnimatePresence>
             </div>
 
-            {product.stock_quantity === 0 && (
+            {product.stockQuantity === 0 && (
               <div className="text-[10px] text-red-400 mt-1">Out of stock</div>
             )}
           </div>

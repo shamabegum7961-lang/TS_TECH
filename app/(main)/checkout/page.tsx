@@ -5,16 +5,16 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Package, Check, ChevronRight, CreditCard, Truck, MapPin, Coins, Sparkles } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { toast } from 'sonner';
+import type { Address } from '@/lib/database.types';
 
 type Step = 'address' | 'payment' | 'review';
 
 interface AddressForm {
-  full_name: string;
+  fullName: string;
   phone: string;
   line1: string;
   line2: string;
@@ -50,11 +50,11 @@ export default function CheckoutPage() {
   const { theme } = useTheme();
   const [step, setStep] = useState<Step>('address');
   const [placing, setPlacing] = useState(false);
-  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [address, setAddress] = useState<AddressForm>({
-    full_name: '', phone: '', line1: '', line2: '',
+    fullName: '', phone: '', line1: '', line2: '',
     city: '', state: '', pincode: '', notes: '',
   });
 
@@ -78,40 +78,32 @@ export default function CheckoutPage() {
   }, [items.length, router]);
 
   useEffect(() => {
-    if (user) {
-      supabase
-        .from('addresses')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('is_default', { ascending: false })
-        .then(({ data }) => {
-          setSavedAddresses(data ?? []);
-          const defaultAddr = data?.find((a) => a.is_default);
-          if (defaultAddr) {
-            setSelectedAddressId(defaultAddr.id);
-            setAddress({
-              full_name: defaultAddr.full_name,
-              phone: defaultAddr.phone,
-              line1: defaultAddr.line1,
-              line2: defaultAddr.line2 ?? '',
-              city: defaultAddr.city,
-              state: defaultAddr.state,
-              pincode: defaultAddr.pincode,
-              notes: '',
-            });
-          }
-        });
+    if (!user) return;
 
-      // Fetch loyalty points
-      supabase.rpc('refresh_loyalty_for_user', { uid: user.id }).then(() => {
-        supabase
-          .from('loyalty_memberships')
-          .select('points')
-          .eq('user_id', user.id)
-          .maybeSingle()
-          .then(({ data }) => setLoyaltyPoints(data?.points ?? 0));
+    fetch('/api/addresses', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(({ addresses }: { addresses: Address[] }) => {
+        const list: Address[] = addresses ?? [];
+        setSavedAddresses(list);
+        const defaultAddr = list.find((a) => a.isDefault);
+        if (defaultAddr) {
+          setSelectedAddressId(defaultAddr.id);
+          setAddress({
+            fullName: defaultAddr.fullName,
+            phone: defaultAddr.phone,
+            line1: defaultAddr.line1,
+            line2: defaultAddr.line2 ?? '',
+            city: defaultAddr.city,
+            state: defaultAddr.state,
+            pincode: defaultAddr.pincode,
+            notes: '',
+          });
+        }
       });
-    }
+
+    fetch('/api/loyalty', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(({ membership }) => setLoyaltyPoints(membership?.points ?? 0));
   }, [user]);
 
   const deliveryInfo = getDeliveryCharge(total);
@@ -126,7 +118,7 @@ export default function CheckoutPage() {
   const currentStepIndex = STEPS.indexOf(step);
 
   const validateAddress = () => {
-    return address.full_name.trim() && address.phone.trim() && address.line1.trim() &&
+    return address.fullName.trim() && address.phone.trim() && address.line1.trim() &&
            address.city.trim() && address.state.trim() && address.pincode.trim();
   };
 
@@ -137,49 +129,43 @@ export default function CheckoutPage() {
     setPlacing(true);
 
     try {
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user.id,
-          status: 'confirmed',
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           subtotal: total,
-          shipping_fee: shippingFee,
+          shippingFee,
           total: grandTotal,
-          points_redeemed: actualPointsToRedeem,
-          loyalty_discount: loyaltyDiscount,
-          shipping_full_name: address.full_name,
-          shipping_phone: address.phone,
-          shipping_line1: address.line1,
-          shipping_line2: address.line2 || null,
-          shipping_city: address.city,
-          shipping_state: address.state,
-          shipping_pincode: address.pincode,
-          payment_method: paymentMethod,
-          payment_status: paymentMethod === 'cod' ? 'pending' : 'paid',
+          pointsRedeemed: actualPointsToRedeem,
+          loyaltyDiscount,
+          shippingFullName: address.fullName,
+          shippingPhone: address.phone,
+          shippingLine1: address.line1,
+          shippingLine2: address.line2 || null,
+          shippingCity: address.city,
+          shippingState: address.state,
+          shippingPincode: address.pincode,
+          paymentMethod,
           notes: address.notes || null,
-        })
-        .select()
-        .single();
+          items: items.map((item) => ({
+            productId: item.product.id,
+            productName: item.product.name,
+            productImage: (item.product.images as string[])?.[0] ?? null,
+            quantity: item.quantity,
+            unitPrice: item.product.price,
+          })),
+        }),
+      });
 
-      if (orderError) throw orderError;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to place order');
+      }
 
-      const orderItems = items.map((item) => ({
-        order_id: order.id,
-        product_id: item.product.id,
-        product_name: item.product.name,
-        product_image: (item.product.images as string[])?.[0] ?? null,
-        quantity: item.quantity,
-        unit_price: item.product.price,
-      }));
-
-      const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
-      if (itemsError) throw itemsError;
-
+      const { order } = await res.json();
       await clearCart();
-      // Refresh loyalty points after order (points earned - points redeemed)
-      await supabase.rpc('refresh_loyalty_for_user', { uid: user.id });
       setPlacing(false);
-      router.push(`/thank-you?order=${order.order_number}`);
+      router.push(`/thank-you?order=${order.orderNumber}`);
     } catch (err: any) {
       setPlacing(false);
       toast.error('Failed to place order: ' + (err.message ?? 'Unknown error'));
@@ -240,7 +226,7 @@ export default function CheckoutPage() {
                         onClick={() => {
                           setSelectedAddressId(addr.id);
                           setAddress({
-                            full_name: addr.full_name, phone: addr.phone, line1: addr.line1,
+                            fullName: addr.fullName, phone: addr.phone, line1: addr.line1,
                             line2: addr.line2 ?? '', city: addr.city, state: addr.state,
                             pincode: addr.pincode, notes: '',
                           });
@@ -251,10 +237,10 @@ export default function CheckoutPage() {
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className={`text-sm font-medium ${tc}`}>{addr.full_name}</div>
+                            <div className={`text-sm font-medium ${tc}`}>{addr.fullName}</div>
                             <div className={`text-xs ${mc}`}>{addr.line1}, {addr.city}, {addr.state} - {addr.pincode}</div>
                           </div>
-                          {addr.is_default && <span className="badge-gold text-[10px]">Default</span>}
+                          {addr.isDefault && <span className="badge-gold text-[10px]">Default</span>}
                         </div>
                       </button>
                     ))}
@@ -265,7 +251,7 @@ export default function CheckoutPage() {
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <label className={`block text-xs ${sc} mb-1.5`}>Full Name *</label>
-                    <input type="text" value={address.full_name} onChange={(e) => setAddress((p) => ({ ...p, full_name: e.target.value }))}
+                    <input type="text" value={address.fullName} onChange={(e) => setAddress((p) => ({ ...p, fullName: e.target.value }))}
                       className="w-full input-dark px-4 py-2.5 rounded-xl text-sm" placeholder="John Doe" />
                   </div>
                   <div>
@@ -361,7 +347,7 @@ export default function CheckoutPage() {
                   {/* Address Summary */}
                   <div className={`rounded-xl p-4 mb-4 ${innerBg}`}>
                     <div className={`text-xs ${mc} mb-1 flex items-center gap-1`}><MapPin size={11} /> Shipping Address</div>
-                    <div className={`text-sm font-medium ${tc}`}>{address.full_name}</div>
+                    <div className={`text-sm font-medium ${tc}`}>{address.fullName}</div>
                     <div className={`text-xs ${sc}`}>{address.line1}{address.line2 ? `, ${address.line2}` : ''}</div>
                     <div className={`text-xs ${sc}`}>{address.city}, {address.state} - {address.pincode}</div>
                     <div className={`text-xs ${sc}`}>Phone: {address.phone}</div>

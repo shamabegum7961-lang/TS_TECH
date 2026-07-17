@@ -9,7 +9,6 @@ import { ShoppingCart, Search, User, Menu, X, ChevronDown, Settings, Sun, Moon, 
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
-import { supabase } from '@/lib/supabase';
 interface SearchResult { id: string; name: string; slug: string; price: number; brand: string | null; images: string[]; categories: { slug: string; name: string }[] | null; }
 
 const LOGO = '/images/WhatsApp_Image_2026-07-12_at_14.52.06 copy copy.jpeg';
@@ -57,25 +56,16 @@ export function Navbar() {
     if (!searchQuery.trim()) { setSearchResults([]); return; }
     const timer = setTimeout(async () => {
       setSearching(true);
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, slug, price, brand, images, categories(slug, name)')
-        .or(`name.ilike.%${searchQuery}%,brand.ilike.%${searchQuery}%`)
-        .eq('is_active', true)
-        .limit(6);
-      setSearchResults(data ?? []);
+      const res = await fetch(`/api/products?q=${encodeURIComponent(searchQuery)}&limit=6`, { cache: 'no-store' });
+      const data = await res.json();
+      setSearchResults(data.products ?? []);
       setSearching(false);
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
   useEffect(() => {
-    if (user) {
-      supabase.from('profiles').select('is_admin').eq('id', user.id).maybeSingle()
-        .then(({ data }) => setIsAdmin(data?.is_admin ?? false));
-    } else {
-      setIsAdmin(false);
-    }
+    setIsAdmin((user as any)?.isAdmin ?? false);
   }, [user]);
 
   useEffect(() => {

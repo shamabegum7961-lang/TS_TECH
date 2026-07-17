@@ -4,13 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import {
-  User, Package, LogOut, ChevronRight,
-  ShoppingBag, Clock, CheckCircle, Truck, XCircle, Gift, Coins, Heart,
-} from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { User, Package, LogOut, ChevronRight, ShoppingBag, Clock, CircleCheck as CheckCircle, Truck, Circle as XCircle, Gift, Coins, Heart } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useWishlist } from '@/context/WishlistContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ProductCard } from '@/components/ProductCard';
 import { ReferralPanel } from '@/components/ReferralPanel';
@@ -42,10 +37,10 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 export default function AccountPage() {
   const router = useRouter();
   const { user, signOut, loading: authLoading } = useAuth();
-  const { wishlistIds } = useWishlist();
   const { theme } = useTheme();
   const [tab, setTab] = useState<Tab>('orders');
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [wishlistProducts, setWishlistProducts] = useState<Product[]>([]);
   const [loyaltyPoints, setLoyaltyPoints] = useState<number>(0);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -66,37 +61,31 @@ export default function AccountPage() {
 
   useEffect(() => {
     if (!user) return;
-    Promise.all([
-      supabase
-        .from('orders')
-        .select('*, order_items(*, products(images, name))')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .then(({ data }) => {
-          setOrders((data as OrderWithItems[]) ?? []);
-          setLoadingOrders(false);
-        }),
-      supabase.rpc('refresh_loyalty_for_user', { uid: user.id }).then(() => {
-          return supabase
-            .from('loyalty_memberships')
-            .select('points')
-            .eq('user_id', user.id)
-            .maybeSingle();
-        }).then(({ data }) => {
-          setLoyaltyPoints(data?.points ?? 0);
-        }),
-    ]);
+
+    fetch('/api/orders', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(({ orders }) => {
+        setOrders((orders as OrderWithItems[]) ?? []);
+        setLoadingOrders(false);
+      });
+
+    fetch('/api/loyalty', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(({ membership }) => setLoyaltyPoints(membership?.points ?? 0));
   }, [user]);
 
   useEffect(() => {
-    if (wishlistIds.length === 0) { setWishlistProducts([]); return; }
-    supabase
-      .from('products')
-      .select('*')
-      .in('id', wishlistIds)
-      .eq('is_active', true)
-      .then(({ data }) => setWishlistProducts(data ?? []));
-  }, [wishlistIds]);
+    fetch('/api/wishlist', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(({ ids }) => {
+        const idList = ids ?? [];
+        setWishlistIds(idList);
+        if (idList.length === 0) { setWishlistProducts([]); return; }
+        fetch(`/api/products?ids=${idList.join(',')}`, { cache: 'no-store' })
+          .then((r) => r.json())
+          .then(({ products }) => setWishlistProducts((products as Product[]) ?? []));
+      });
+  }, [user]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -111,7 +100,7 @@ export default function AccountPage() {
     );
   }
 
-  const userName = user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'User';
+  const userName = user.fullName ?? user.email?.split('@')[0] ?? 'User';
 
   return (
     <div className="min-h-screen pt-28 pb-16">
@@ -186,9 +175,9 @@ export default function AccountPage() {
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <div className={`text-sm font-semibold ${tc}`}>{order.order_number}</div>
+                          <div className={`text-sm font-semibold ${tc}`}>{order.orderNumber}</div>
                           <div className={`text-xs ${mc} mt-0.5`}>
-                            {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </div>
                         </div>
                         <div className={`flex items-center gap-1.5 text-xs font-semibold ${status.color}`}>
@@ -202,7 +191,7 @@ export default function AccountPage() {
                           <div key={item.id} className="relative">
                             <div className={`w-12 h-12 rounded-lg overflow-hidden border ${isDark ? 'bg-dark-300 border-white/5' : 'bg-gray-100 border-gray-200'}`}>
                               {item.products?.images?.[0] && (
-                                <img src={item.products.images[0]} alt={item.product_name} className="w-full h-full object-cover" />
+                                <img src={item.products.images[0]} alt={item.productName} className="w-full h-full object-cover" />
                               )}
                             </div>
                             {item.quantity > 1 && (
@@ -226,7 +215,7 @@ export default function AccountPage() {
                           <span className="text-sm font-semibold text-gold-400">₹{order.total.toLocaleString('en-IN')}</span>
                         </div>
                         <div className={`text-xs ${mc}`}>
-                          {order.payment_method.toUpperCase()} · {order.payment_status}
+                          {order.paymentMethod.toUpperCase()} · {order.paymentStatus}
                         </div>
                       </div>
                     </motion.div>
@@ -270,9 +259,9 @@ export default function AccountPage() {
           <div className={`card-surface rounded-2xl border ${cardBorder} p-6 max-w-lg space-y-4`}>
             <h2 className={`text-lg font-bold ${tc}`}>Account Details</h2>
             {[
-              { label: 'Full Name', value: user.user_metadata?.full_name ?? '—' },
+              { label: 'Full Name', value: user.fullName ?? '—' },
               { label: 'Email', value: user.email },
-              { label: 'Member Since', value: new Date(user.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) },
+              { label: 'Member Since', value: new Date(user.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) },
               { label: 'Loyalty Points', value: `${loyaltyPoints.toLocaleString('en-IN')} pts (₹${Math.floor(loyaltyPoints / 100) * 50} value)` },
             ].map(({ label, value }) => (
               <div key={label}>

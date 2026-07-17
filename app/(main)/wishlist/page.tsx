@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Heart, ShoppingBag, ArrowRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useWishlist } from '@/context/WishlistContext';
 import { useAuth } from '@/context/AuthContext';
 import { ProductCard } from '@/components/ProductCard';
@@ -23,13 +22,10 @@ export default function WishlistPage() {
       return;
     }
     setLoading(true);
-    supabase
-      .from('products')
-      .select('*')
-      .in('id', wishlistIds)
-      .eq('is_active', true)
-      .then(({ data }) => {
-        setProducts(data ?? []);
+    fetch(`/api/products?ids=${wishlistIds.join(',')}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(({ products }) => {
+        setProducts((products as Product[]) ?? []);
         setLoading(false);
       });
   }, [wishlistIds]);

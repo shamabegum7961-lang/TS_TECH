@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, SlidersHorizontal, X, ChevronDown, ArrowUp, Zap, Check } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { ProductCard } from '@/components/ProductCard';
 import type { Product, Category } from '@/lib/database.types';
 
@@ -113,43 +112,32 @@ export default function ProductsPage() {
   }, [categoryParam, queryParam]);
 
   useEffect(() => {
-    supabase.from('categories').select('*').order('display_order').then(({ data }) => setCategories(data ?? []));
-    supabase.from('products').select('brand').eq('is_active', true).not('brand', 'is', null).then(({ data }) => {
-      const unique = Array.from(new Set(data?.map((d) => d.brand).filter(Boolean))) as string[];
-      setBrands(unique.sort());
+    Promise.all([
+      fetch('/api/categories', { cache: 'no-store' }).then((r) => r.json()),
+      fetch('/api/products?brands_only=true', { cache: 'no-store' }).then((r) => r.json()),
+    ]).then(([cats, brands]) => {
+      setCategories(cats.categories ?? []);
+      setBrands((brands.brands ?? []).sort());
     });
   }, []);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
-    const [sortField, sortDir] = sortBy.split(':');
-    let query = supabase
-      .from('products')
-      .select('*')
-      .eq('is_active', true)
-      .gte('price', priceRange[0])
-      .lte('price', priceRange[1])
-      .order(sortField as 'price' | 'name' | 'created_at', { ascending: sortDir === 'asc' });
-
+    const params = new URLSearchParams();
+    params.set('is_active', 'true');
+    params.set('sort', sortBy);
+    params.set('min_price', String(priceRange[0]));
+    params.set('max_price', String(priceRange[1]));
     if (selectedCategory) {
       const cat = categories.find((c) => c.slug === selectedCategory);
-      if (cat) query = query.eq('category_id', cat.id);
+      if (cat) params.set('category', cat.slug);
     }
-
-    if (searchQuery.trim()) {
-      query = query.ilike('name', `%${searchQuery.trim()}%`);
-    }
-
-    if (selectedBrand !== 'all') {
-      query = query.eq('brand', selectedBrand);
-    }
-
-    if (fastDeliveryOnly) {
-      query = query.eq('fast_delivery', true);
-    }
-
-    const { data } = await query;
-    setProducts(data ?? []);
+    if (searchQuery.trim()) params.set('q', searchQuery.trim());
+    if (selectedBrand !== 'all') params.set('brand', selectedBrand);
+    if (fastDeliveryOnly) params.set('fast_delivery', 'true');
+    const res = await fetch(`/api/products?${params}`, { cache: 'no-store' });
+    const data = await res.json();
+    setProducts(data.products ?? []);
     setLoading(false);
   }, [selectedCategory, searchQuery, sortBy, priceRange, categories, selectedBrand, fastDeliveryOnly]);
 

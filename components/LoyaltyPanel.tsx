@@ -3,18 +3,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Coins, TrendingUp, Gift, Sparkles, Wallet, ShoppingBag } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 
 interface LoyaltyMembership {
   tier: string;
-  total_spend: number;
-  total_orders: number;
+  totalSpend: number;
+  totalOrders: number;
   points: number;
-  next_tier_points: number;
-  tier_since: string;
-  last_updated_at: string;
+  nextTierPoints: number;
+  tierSince: string;
+  lastUpdatedAt: string;
 }
 
 const POINTS_SLABS = [
@@ -38,12 +37,8 @@ export function LoyaltyPanel() {
 
   const fetchMembership = useCallback(async () => {
     if (!user) return;
-    await supabase.rpc('refresh_loyalty_for_user', { uid: user.id });
-    const { data } = await supabase
-      .from('loyalty_memberships')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    const res = await fetch('/api/loyalty', { cache: 'no-store' });
+    const data = await res.json();
     setMembership(data);
     setLoading(false);
   }, [user]);
@@ -67,8 +62,8 @@ export function LoyaltyPanel() {
 
   const currentPoints = membership?.points ?? 0;
   const walletValue = Math.floor(currentPoints / REDEMPTION_RATE) * REDEMPTION_VALUE;
-  const totalSpend = membership?.total_spend ?? 0;
-  const totalOrders = membership?.total_orders ?? 0;
+  const totalSpend = membership?.totalSpend ?? 0;
+  const totalOrders = membership?.totalOrders ?? 0;
 
   const textColor = isDark ? 'text-white' : 'text-gray-900';
   const subTextColor = isDark ? 'text-silver-400' : 'text-gray-600';

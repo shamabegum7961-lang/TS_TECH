@@ -9,7 +9,6 @@ import {
   Star, Plus, Minus, Heart, ChevronRight, Package,
   Zap, Box, Check, Pencil, Trash2,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 import { useRecentlyViewed } from '@/context/RecentlyViewedContext';
@@ -48,33 +47,27 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: p } = await supabase
-        .from('products')
-        .select('*')
-        .eq('slug', slug)
-        .eq('is_active', true)
-        .maybeSingle();
+      const res = await fetch(`/api/products/${slug}`, { cache: 'no-store' });
+      if (!res.ok) { setLoading(false); return; }
+      const data = await res.json();
 
+      const p: Product | null = data.product ?? null;
       if (!p) { setLoading(false); return; }
       setProduct(p);
       addRecentlyViewed(p);
 
-      const [{ data: cat }, { data: rev }, { data: rel }] = await Promise.all([
-        p.category_id ? supabase.from('categories').select('*').eq('id', p.category_id).maybeSingle() : { data: null },
-        supabase.from('reviews').select('*').eq('product_id', p.id).order('created_at', { ascending: false }),
-        p.category_id
-          ? supabase.from('products').select('*').eq('category_id', p.category_id).neq('id', p.id).eq('is_active', true).limit(4)
-          : { data: [] },
-      ]);
+      const rev: Review[] = data.reviews ?? [];
+      const rel: Product[] = data.related ?? [];
+      const cat: Category | null = data.category ?? null;
 
-      setCategory(cat ?? null);
-      setReviews(rev ?? []);
-      setRelated(rel ?? []);
+      setCategory(cat);
+      setReviews(rev);
+      setRelated(rel);
       setLoading(false);
 
       // Check if current user has a review
       if (user && rev) {
-        const existing = rev.find((r) => r.user_id === user.id);
+        const existing = rev.find((r) => r.userId === user.id);
         if (existing) {
           setUserReview(existing);
           setReviewRating(existing.rating);
@@ -114,23 +107,16 @@ export default function ProductDetailPage() {
     if (reviewRating < 1 || reviewRating > 5) { toast.error('Please select a rating (1-5 stars)'); return; }
 
     setSubmittingReview(true);
-    // Check if user purchased this product
-    const { data: orderData } = await supabase
-      .from('order_items')
-      .select('id')
-      .eq('product_id', product.id)
-      .in('order_id', (await supabase.from('orders').select('id').eq('user_id', user.id).neq('status', 'cancelled')).data?.map((o: any) => o.id) ?? [])
-      .limit(1);
-
-    const isVerified = (orderData?.length ?? 0) > 0;
 
     if (userReview) {
       // Update existing review
-      const { error } = await supabase
-        .from('reviews')
-        .update({ rating: reviewRating, title: reviewTitle.trim() || null, body: reviewBody.trim() || null })
-        .eq('id', userReview.id);
-      if (error) {
+      const res = await fetch('/api/reviews', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ id: userReview.id, rating: reviewRating, title: reviewTitle.trim() || null, body: reviewBody.trim() || null }),
+      });
+      if (!res.ok) {
         toast.error('Failed to update review');
       } else {
         toast.success('Review updated!');
@@ -141,24 +127,21 @@ export default function ProductDetailPage() {
       }
     } else {
       // Insert new review
-      const { data, error } = await supabase
-        .from('reviews')
-        .insert({
-          product_id: product.id,
-          user_id: user.id,
-          rating: reviewRating,
-          title: reviewTitle.trim() || null,
-          body: reviewBody.trim() || null,
-          is_verified_purchase: isVerified,
-        })
-        .select()
-        .single();
-      if (error) {
-        toast.error('Failed to submit review: ' + error.message);
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ productId: product.id, rating: reviewRating, title: reviewTitle.trim() || null, body: reviewBody.trim() || null }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error('Failed to submit review: ' + (err.error ?? err.message ?? 'Unknown error'));
       } else {
+        const data = await res.json();
+        const newReview = data.review ?? data;
         toast.success('Review submitted!');
-        setUserReview(data);
-        setReviews((prev) => [data, ...prev]);
+        setUserReview(newReview);
+        setReviews((prev) => [newReview, ...prev]);
       }
     }
     setSubmittingReview(false);
@@ -166,8 +149,8 @@ export default function ProductDetailPage() {
 
   const handleDeleteReview = async () => {
     if (!userReview) return;
-    const { error } = await supabase.from('reviews').delete().eq('id', userReview.id);
-    if (error) {
+    const res = await fetch(`/api/reviews?id=${userReview.id}`, { method: 'DELETE', cache: 'no-store' });
+    if (!res.ok) {
       toast.error('Failed to delete review');
     } else {
       toast.success('Review deleted');
@@ -179,14 +162,14 @@ export default function ProductDetailPage() {
     }
   };
 
-  const colorVariants = ((product?.color_variants as ColorVariant[] | null) ?? []).filter((v) => v.color && v.images.length > 0);
+  const colorVariants = ((product?.colorVariants as ColorVariant[] | null) ?? []).filter((v) => v.color && v.images.length > 0);
   const generalImages = (product?.images ?? []) as string[];
   const currentImages = colorVariants.length > 0 && colorVariants[activeColor]
     ? colorVariants[activeColor].images
     : generalImages;
-  const inTheBox = (product?.in_the_box as string[] | null) ?? [];
-  const discount = product?.compare_price
-    ? Math.round(((product.compare_price - product.price) / product.compare_price) * 100)
+  const inTheBox = (product?.inTheBox as string[] | null) ?? [];
+  const discount = product?.comparePrice
+    ? Math.round(((product.comparePrice - product.price) / product.comparePrice) * 100)
     : null;
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : null;
   const wishlisted = product ? isInWishlist(product.id) : false;
@@ -245,7 +228,7 @@ export default function ProductDetailPage() {
                 </div>
               )}
               {discount && <div className="absolute top-4 left-4 badge-gold">{discount}% OFF</div>}
-              {product.fast_delivery && (
+              {product.fastDelivery && (
                 <div className="absolute top-4 right-4 flex items-center gap-1 bg-green-500/20 backdrop-blur-sm text-green-400 text-[10px] font-semibold px-2.5 py-1 rounded-full border border-green-500/30">
                   <Zap size={10} /> Fast Delivery
                 </div>
@@ -287,8 +270,8 @@ export default function ProductDetailPage() {
             {/* Price */}
             <div className="flex items-baseline gap-3 mb-6">
               <span className="text-3xl font-bold text-gold-400">₹{product.price.toLocaleString('en-IN')}</span>
-              {product.compare_price && (
-                <span className="text-lg text-silver-600 line-through">₹{product.compare_price.toLocaleString('en-IN')}</span>
+              {product.comparePrice && (
+                <span className="text-lg text-silver-600 line-through">₹{product.comparePrice.toLocaleString('en-IN')}</span>
               )}
               {discount && <span className="badge-gold">{discount}% off</span>}
             </div>
@@ -346,12 +329,12 @@ export default function ProductDetailPage() {
 
             {/* Stock */}
             <div className="mb-6">
-              {product.stock_quantity > 0 ? (
+              {product.stockQuantity > 0 ? (
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-2 h-2 rounded-full bg-green-500" />
                   <span className="text-green-400 font-medium">In Stock</span>
-                  {product.stock_quantity <= 5 && (
-                    <span className="text-silver-500">— only {product.stock_quantity} left</span>
+                  {product.stockQuantity <= 5 && (
+                    <span className="text-silver-500">— only {product.stockQuantity} left</span>
                   )}
                 </div>
               ) : (
@@ -363,7 +346,7 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Quantity + Add to Cart + Buy Now */}
-            {product.stock_quantity > 0 && (
+            {product.stockQuantity > 0 && (
               <div className="space-y-3 mb-6">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-dark-400 border border-white/10 rounded-xl p-1">
@@ -371,7 +354,7 @@ export default function ProductDetailPage() {
                       <Minus size={14} />
                     </button>
                     <span className="w-8 text-center text-sm font-semibold text-white">{quantity}</span>
-                    <button onClick={() => setQuantity((q) => Math.min(product.stock_quantity, q + 1))} className="w-8 h-8 flex items-center justify-center text-silver-400 hover:text-white transition-colors">
+                    <button onClick={() => setQuantity((q) => Math.min(product.stockQuantity, q + 1))} className="w-8 h-8 flex items-center justify-center text-silver-400 hover:text-white transition-colors">
                       <Plus size={14} />
                     </button>
                   </div>
@@ -411,7 +394,7 @@ export default function ProductDetailPage() {
             <div className="grid grid-cols-3 gap-3 mb-6">
               {[
                 { icon: Shield, label: 'Genuine Product' },
-                { icon: Truck, label: product.fast_delivery ? 'Delivery in 1 Day' : 'Fast Delivery' },
+                { icon: Truck, label: product.fastDelivery ? 'Delivery in 1 Day' : 'Fast Delivery' },
                 { icon: RotateCcw, label: '7-Day Return' },
               ].map((b) => (
                 <div key={b.label} className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/3 border border-white/5">
@@ -422,10 +405,10 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Warranty */}
-            {product.warranty_info && (
+            {product.warrantyInfo && (
               <div className="flex items-center gap-2 text-sm text-silver-500 bg-white/3 border border-white/5 rounded-xl px-4 py-3">
                 <Shield size={14} className="text-gold-500 flex-shrink-0" />
-                <span>{product.warranty_info}</span>
+                <span>{product.warrantyInfo}</span>
               </div>
             )}
           </div>
@@ -472,7 +455,7 @@ export default function ProductDetailPage() {
                 <div>
                   <div className="flex items-center gap-3 mb-3">
                     <StarRating value={userReview.rating} readOnly size={18} />
-                    {userReview.is_verified_purchase && <span className="text-[10px] text-green-400">Verified Purchase</span>}
+                    {userReview.isVerifiedPurchase && <span className="text-[10px] text-green-400">Verified Purchase</span>}
                   </div>
                   {userReview.title && <div className="text-sm font-semibold text-white mb-1">{userReview.title}</div>}
                   {userReview.body && <p className="text-sm text-silver-400 leading-relaxed mb-3">{userReview.body}</p>}
@@ -546,12 +529,12 @@ export default function ProductDetailPage() {
                 <div key={r.id} className="card-surface rounded-xl p-4 border border-white/5">
                   <div className="flex items-center justify-between mb-2">
                     <StarRating value={r.rating} readOnly size={14} />
-                    {r.is_verified_purchase && <span className="text-[10px] text-green-400">Verified</span>}
+                    {r.isVerifiedPurchase && <span className="text-[10px] text-green-400">Verified</span>}
                   </div>
                   {r.title && <div className="text-sm font-semibold text-white mb-1">{r.title}</div>}
                   {r.body && <p className="text-sm text-silver-400 leading-relaxed">{r.body}</p>}
                   <div className="text-[10px] text-silver-600 mt-2">
-                    {new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
                 </div>
               ))}

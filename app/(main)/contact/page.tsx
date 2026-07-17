@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Phone, Mail, MapPin, Clock, Send, CheckCircle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { Phone, Mail, MapPin, Clock, Send, CircleCheck as CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ContactPage() {
@@ -26,19 +25,28 @@ export default function ContactPage() {
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setErrors({});
     setSubmitting(true);
-    const { error } = await supabase.from('contact_submissions').insert({
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim() || null,
-      subject: form.subject.trim() || null,
-      message: form.message.trim(),
-    });
-    setSubmitting(false);
-    if (error) {
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim() || null,
+          subject: form.subject.trim() || null,
+          message: form.message.trim(),
+        }),
+      });
+      setSubmitting(false);
+      if (!res.ok) {
+        toast.error('Failed to send message. Please try again.');
+      } else {
+        setSubmitted(true);
+        setForm({ name: '', email: '', phone: '', subject: '', message: '' });
+      }
+    } catch {
+      setSubmitting(false);
       toast.error('Failed to send message. Please try again.');
-    } else {
-      setSubmitted(true);
-      setForm({ name: '', email: '', phone: '', subject: '', message: '' });
     }
   };
 

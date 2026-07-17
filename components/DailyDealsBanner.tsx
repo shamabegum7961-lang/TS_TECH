@@ -4,20 +4,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Flame, Tag } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-interface DealItem { id: string; name: string; slug: string; price: number; compare_price: number | null; images: string[]; }
+interface DealItem { id: string; name: string; slug: string; price: number; comparePrice: number | null; images: string[]; }
 
 export function DailyDealsBanner() {
   const [deals, setDeals] = useState<DealItem[]>([]);
 
   useEffect(() => {
-    supabase
-      .from('products')
-      .select('id, name, slug, price, compare_price, images')
-      .eq('is_daily_deal', true)
-      .eq('is_active', true)
-      .limit(10)
-      .then(({ data }) => setDeals(data ?? []));
+    fetch('/api/products?daily_deal=true&limit=10', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => setDeals((data.products ?? []) as DealItem[]));
   }, []);
 
   if (deals.length === 0) return null;
@@ -41,8 +36,8 @@ export function DailyDealsBanner() {
             className="flex gap-6 w-max items-center h-8"
           >
             {items.map((product, i) => {
-              const discount = product.compare_price
-                ? Math.round(((product.compare_price - product.price) / product.compare_price) * 100)
+              const discount = product.comparePrice
+                ? Math.round(((product.comparePrice - product.price) / product.comparePrice) * 100)
                 : null;
               return (
                 <Link

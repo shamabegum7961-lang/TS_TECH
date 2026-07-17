@@ -13,7 +13,6 @@ export async function POST(req: NextRequest) {
     const user = await signUp(email, password, fullName || email.split('@')[0]);
     return NextResponse.json({ user });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Sign up failed';
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
 }

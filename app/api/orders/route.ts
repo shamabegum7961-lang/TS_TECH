@@ -3,60 +3,68 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
-  const orderNumber = searchParams.get('orderNumber');
+    const { searchParams } = new URL(req.url);
+    const orderNumber = searchParams.get('orderNumber');
 
-  if (orderNumber) {
-    const order = await prisma.order.findFirst({
-      where: { orderNumber },
-      include: { orderItems: true },
+    if (orderNumber) {
+      const order = await prisma.order.findFirst({
+        where: { orderNumber },
+        include: { orderItems: true },
+      });
+      return NextResponse.json({ order });
+    }
+
+    const orders = await prisma.order.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      include: { orderItems: { include: { product: { select: { images: true, name: true } } } } },
     });
-    return NextResponse.json({ order });
+    return NextResponse.json({ orders });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
-
-  const orders = await prisma.order.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: 'desc' },
-    include: { orderItems: { include: { product: { select: { images: true, name: true } } } } },
-  });
-  return NextResponse.json({ orders });
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await req.json();
-  const {
-    subtotal, shippingFee, total, pointsRedeemed = 0, loyaltyDiscount = 0,
-    shippingFullName, shippingPhone, shippingLine1, shippingLine2, shippingCity, shippingState, shippingPincode,
-    paymentMethod, notes, items,
-  } = body;
-
-  const orderNumber = 'TS-' + Math.random().toString(36).substring(2, 10).toUpperCase();
-
-  const order = await prisma.order.create({
-    data: {
-      orderNumber, userId: user.id, status: 'confirmed',
-      subtotal, shippingFee, total, pointsRedeemed, loyaltyDiscount,
+    const body = await req.json();
+    const {
+      subtotal, shippingFee, total, pointsRedeemed = 0, loyaltyDiscount = 0,
       shippingFullName, shippingPhone, shippingLine1, shippingLine2, shippingCity, shippingState, shippingPincode,
-      paymentMethod, notes,
-      orderItems: {
-        create: items.map((item: { productId: string; productName: string; productImage: string | null; quantity: number; unitPrice: number }) => ({
-          productId: item.productId, productName: item.productName, productImage: item.productImage,
-          quantity: item.quantity, unitPrice: item.unitPrice,
-        })),
+      paymentMethod, notes, items,
+    } = body;
+
+    const orderNumber = 'TS-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+
+    const order = await prisma.order.create({
+      data: {
+        orderNumber, userId: user.id, status: 'confirmed',
+        subtotal, shippingFee, total, pointsRedeemed, loyaltyDiscount,
+        shippingFullName, shippingPhone, shippingLine1, shippingLine2, shippingCity, shippingState, shippingPincode,
+        paymentMethod, notes,
+        orderItems: {
+          create: items.map((item: { productId: string; productName: string; productImage: string | null; quantity: number; unitPrice: number }) => ({
+            productId: item.productId, productName: item.productName, productImage: item.productImage,
+            quantity: item.quantity, unitPrice: item.unitPrice,
+          })),
+        },
       },
-    },
-    include: { orderItems: true },
-  });
+      include: { orderItems: true },
+    });
 
-  await refreshLoyalty(user.id);
+    await refreshLoyalty(user.id);
 
-  return NextResponse.json({ order });
+    return NextResponse.json({ order });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
+  }
 }
 
 async function refreshLoyalty(userId: string) {

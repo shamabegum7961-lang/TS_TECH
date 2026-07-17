@@ -43,7 +43,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <h1 className="text-xl font-bold text-white">Access Denied</h1>
         <p className="text-silver-400 max-w-sm">
           You don&apos;t have admin access. If you&apos;re the owner, please set{' '}
-          <code className="text-gold-400">is_admin = true</code> for your profile in the Supabase dashboard.
+          <code className="text-gold-400">isAdmin = true</code> for your profile in the database.
         </p>
         <Link href="/" className="btn-outline-gold px-5 py-2.5 rounded-xl text-sm">
           Back to Home

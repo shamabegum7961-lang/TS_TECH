@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { serializeCartItem } from '@/lib/serialize';
 
 export async function GET() {
   try {
@@ -9,9 +10,9 @@ export async function GET() {
 
     const items = await prisma.cartItem.findMany({
       where: { userId: user.id },
-      include: { product: true },
+      include: { product: { include: { category: true } } },
     });
-    return NextResponse.json({ items });
+    return NextResponse.json({ items: items.map(serializeCartItem) as any });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }

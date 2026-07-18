@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -48,21 +48,21 @@ model Product {
   description    String?
   price          Float
   comparePrice   Float?
-  images         String[] @default([])
+  images         String   @default("[]")
   categoryId     String?
   brand          String?
   model          String?
   color          String?
-  colorVariants  Json?
-  inTheBox       String[]
+  colorVariants  String?
+  inTheBox       String   @default("[]")
   fastDelivery   Boolean  @default(false)
   isDailyDeal    Boolean  @default(false)
   stockQuantity  Int      @default(0)
   isFeatured     Boolean  @default(false)
   isActive       Boolean  @default(true)
-  tags           String[]
+  tags           String   @default("[]")
   warrantyInfo   String?
-  specifications Json     @default("{}")
+  specifications String   @default("{}")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

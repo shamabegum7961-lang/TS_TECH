@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { serializeProduct, serializeProducts, serializeReview } from '@/lib/serialize';
 
 export async function GET(
   _req: NextRequest,
@@ -27,7 +28,11 @@ export async function GET(
       }),
     ]);
 
-    return NextResponse.json({ product, reviews, related });
+    return NextResponse.json({
+      product: serializeProduct(product as any),
+      reviews: reviews.map(serializeReview),
+      related: serializeProducts(related as any),
+    });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }

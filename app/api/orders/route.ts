@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { serializeOrder } from '@/lib/serialize';
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,9 +14,9 @@ export async function GET(req: NextRequest) {
     if (orderNumber) {
       const order = await prisma.order.findFirst({
         where: { orderNumber },
-        include: { orderItems: true },
+        include: { orderItems: { include: { product: { select: { images: true, name: true } } } } },
       });
-      return NextResponse.json({ order });
+      return NextResponse.json({ order: order ? serializeOrder(order as any) : null });
     }
 
     const orders = await prisma.order.findMany({
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: { orderItems: { include: { product: { select: { images: true, name: true } } } } },
     });
-    return NextResponse.json({ orders });
+    return NextResponse.json({ orders: orders.map((o) => serializeOrder(o as any)) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
@@ -56,12 +57,12 @@ export async function POST(req: NextRequest) {
           })),
         },
       },
-      include: { orderItems: true },
+      include: { orderItems: { include: { product: { select: { images: true, name: true } } } } },
     });
 
     await refreshLoyalty(user.id);
 
-    return NextResponse.json({ order });
+    return NextResponse.json({ order: serializeOrder(order as any) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }

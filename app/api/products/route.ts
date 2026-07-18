@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { serializeProducts, serializeProduct } from '@/lib/serialize';
 
 export async function GET(req: NextRequest) {
   try {
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     if (dailyDeal === 'true') where.isDailyDeal = true;
     if (fastDelivery === 'true') where.fastDelivery = true;
     if (brand && brand !== 'all') where.brand = brand;
-    if (search) where.name = { contains: search, mode: 'insensitive' };
+    if (search) where.name = { contains: search };
     if (minPrice || maxPrice) {
       where.price = {
         ...(minPrice && { gte: parseFloat(minPrice) }),
@@ -59,9 +60,10 @@ export async function GET(req: NextRequest) {
       where,
       orderBy,
       ...(limit && { take: parseInt(limit, 10) }),
+      include: { category: true },
     });
 
-    return NextResponse.json({ products });
+    return NextResponse.json({ products: serializeProducts(products as any) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
@@ -72,8 +74,16 @@ export async function POST(req: NextRequest) {
   if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
   try {
-    const product = await prisma.product.create({ data });
-    return NextResponse.json({ product });
+    const prepared = {
+      ...data,
+      ...(data.images && { images: JSON.stringify(data.images) }),
+      ...(data.tags && { tags: JSON.stringify(data.tags) }),
+      ...(data.inTheBox && { inTheBox: JSON.stringify(data.inTheBox) }),
+      ...(data.specifications && { specifications: JSON.stringify(data.specifications) }),
+      ...(data.colorVariants && { colorVariants: JSON.stringify(data.colorVariants) }),
+    };
+    const product = await prisma.product.create({ data: prepared });
+    return NextResponse.json({ product: serializeProduct(product as any) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }

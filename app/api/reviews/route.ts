@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { serializeReview } from '@/lib/serialize';
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: { user: { select: { fullName: true } } },
     });
-    return NextResponse.json({ reviews });
+    return NextResponse.json({ reviews: reviews.map(serializeReview) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
       update: { rating, title, body, isVerifiedPurchase: isVerified },
       include: { user: { select: { fullName: true } } },
     });
-    return NextResponse.json({ review });
+    return NextResponse.json({ review: serializeReview(review as any) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }

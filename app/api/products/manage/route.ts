@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { serializeProduct, serializeProducts } from '@/lib/serialize';
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,8 +19,9 @@ export async function GET(req: NextRequest) {
       if (ids.length === 0) return NextResponse.json({ products: [] });
       const products = await prisma.product.findMany({
         where: { id: { in: ids }, isActive: true },
+        include: { category: true },
       });
-      return NextResponse.json({ products });
+      return NextResponse.json({ products: serializeProducts(products as any) });
     }
 
     const user = await getCurrentUser();

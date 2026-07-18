@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { serializeProduct, serializeProducts } from '@/lib/serialize';
 
 export async function GET() {
   try {
@@ -11,7 +12,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
       include: { category: true },
     });
-    return NextResponse.json({ products });
+    return NextResponse.json({ products: serializeProducts(products as any) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
@@ -23,8 +24,16 @@ export async function PUT(req: NextRequest) {
     if (!user?.isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
     const { id, data } = await req.json();
-    const product = await prisma.product.update({ where: { id }, data });
-    return NextResponse.json({ product });
+    const prepared = {
+      ...data,
+      ...(data.images && { images: JSON.stringify(data.images) }),
+      ...(data.tags && { tags: JSON.stringify(data.tags) }),
+      ...(data.inTheBox && { inTheBox: JSON.stringify(data.inTheBox) }),
+      ...(data.specifications && { specifications: JSON.stringify(data.specifications) }),
+      ...(data.colorVariants && { colorVariants: JSON.stringify(data.colorVariants) }),
+    };
+    const product = await prisma.product.update({ where: { id }, data: prepared, include: { category: true } });
+    return NextResponse.json({ product: serializeProduct(product as any) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }

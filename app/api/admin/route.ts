@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { serializeProducts, serializeOrder } from '@/lib/serialize';
 
 export async function GET() {
   try {
@@ -21,7 +22,9 @@ export async function GET() {
 
     return NextResponse.json({
       productCount, orderCount, messageCount, revenue,
-      recentOrders, dailyDeals, allProducts,
+      recentOrders,
+      dailyDeals: serializeProducts(dailyDeals as any),
+      allProducts: serializeProducts(allProducts as any),
     });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
@@ -36,9 +39,9 @@ export async function PUT(req: NextRequest) {
     const { orderNumber } = await req.json();
     const order = await prisma.order.findFirst({
       where: { orderNumber },
-      include: { orderItems: true },
+      include: { orderItems: { include: { product: { select: { images: true, name: true } } } } },
     });
-    return NextResponse.json({ order });
+    return NextResponse.json({ order: order ? serializeOrder(order as any) : null });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }

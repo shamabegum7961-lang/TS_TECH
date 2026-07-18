@@ -74,15 +74,19 @@ export async function POST(req: NextRequest) {
   if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
   try {
-    const prepared = {
-      ...data,
-      ...(data.images && { images: JSON.stringify(data.images) }),
-      ...(data.tags && { tags: JSON.stringify(data.tags) }),
-      ...(data.inTheBox && { inTheBox: JSON.stringify(data.inTheBox) }),
-      ...(data.specifications && { specifications: JSON.stringify(data.specifications) }),
-      ...(data.colorVariants && { colorVariants: JSON.stringify(data.colorVariants) }),
+    const { categoryId, images, tags, inTheBox, specifications, colorVariants, ...rest } = data;
+
+    const prepared: Record<string, unknown> = {
+      ...rest,
+      images: JSON.stringify(images ?? []),
+      tags: JSON.stringify(tags ?? []),
+      inTheBox: JSON.stringify(inTheBox ?? []),
+      specifications: JSON.stringify(specifications ?? {}),
+      colorVariants: colorVariants != null ? JSON.stringify(colorVariants) : null,
+      ...(categoryId ? { category: { connect: { id: categoryId } } } : {}),
     };
-    const product = await prisma.product.create({ data: prepared });
+
+    const product = await prisma.product.create({ data: prepared as any, include: { category: true } });
     return NextResponse.json({ product: serializeProduct(product as any) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });

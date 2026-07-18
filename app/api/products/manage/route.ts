@@ -24,11 +24,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ products: serializeProducts(products as any) });
     }
 
-    const user = await getCurrentUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const product = await prisma.product.findUnique({ where: { id: searchParams.get('id') ?? '' } });
-    return NextResponse.json({ product });
+    const product = await prisma.product.findUnique({
+      where: { id: searchParams.get('id') ?? '' },
+      include: { category: true },
+    });
+    return NextResponse.json({ product: product ? serializeProduct(product as any) : null });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }
@@ -40,8 +40,24 @@ export async function PUT(req: NextRequest) {
     if (!user?.isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
     const { id, data } = await req.json();
-    const product = await prisma.product.update({ where: { id }, data });
-    return NextResponse.json({ product });
+    const { categoryId, images, tags, inTheBox, specifications, colorVariants, ...rest } = data;
+
+    const prepared: Record<string, unknown> = {
+      ...rest,
+      images: JSON.stringify(images ?? []),
+      tags: JSON.stringify(tags ?? []),
+      inTheBox: JSON.stringify(inTheBox ?? []),
+      specifications: JSON.stringify(specifications ?? {}),
+      ...(colorVariants != null ? { colorVariants: JSON.stringify(colorVariants) } : {}),
+      ...(categoryId ? { category: { connect: { id: categoryId } } } : {}),
+    };
+
+    const product = await prisma.product.update({
+      where: { id },
+      data: prepared as any,
+      include: { category: true },
+    });
+    return NextResponse.json({ product: serializeProduct(product as any) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
   }

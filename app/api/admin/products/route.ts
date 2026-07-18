@@ -24,15 +24,23 @@ export async function PUT(req: NextRequest) {
     if (!user?.isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
     const { id, data } = await req.json();
-    const prepared = {
-      ...data,
-      ...(data.images && { images: JSON.stringify(data.images) }),
-      ...(data.tags && { tags: JSON.stringify(data.tags) }),
-      ...(data.inTheBox && { inTheBox: JSON.stringify(data.inTheBox) }),
-      ...(data.specifications && { specifications: JSON.stringify(data.specifications) }),
-      ...(data.colorVariants && { colorVariants: JSON.stringify(data.colorVariants) }),
+    const { categoryId, images, tags, inTheBox, specifications, colorVariants, ...rest } = data;
+
+    const prepared: Record<string, unknown> = {
+      ...rest,
+      images: JSON.stringify(images ?? []),
+      tags: JSON.stringify(tags ?? []),
+      inTheBox: JSON.stringify(inTheBox ?? []),
+      specifications: JSON.stringify(specifications ?? {}),
+      ...(colorVariants != null ? { colorVariants: JSON.stringify(colorVariants) } : {}),
+      ...(categoryId ? { category: { connect: { id: categoryId } } } : {}),
     };
-    const product = await prisma.product.update({ where: { id }, data: prepared, include: { category: true } });
+
+    const product = await prisma.product.update({
+      where: { id },
+      data: prepared as any,
+      include: { category: true },
+    });
     return NextResponse.json({ product: serializeProduct(product as any) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Internal server error' }, { status: 500 });
